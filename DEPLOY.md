@@ -55,7 +55,28 @@ los archivos y dejar el sitio en línea.
       (o pídeme un script para limpiarlos dejando solo categorías y configuración).
 - [ ] Sube tus **fotos reales** de inventario (Productos → Editar → arrastrar/ordenar/elegir principal).
 
-## 6. Notas
+## 6. Solución de problemas
+
+**500 con "Access denied for user 'root'@... (using password: NO)"**
+El servidor está usando la configuración vieja (XAMPP: root sin clave). Causas y arreglo:
+1. Existe `app/config/local.php` en el servidor (fuerza modo local + root). **Bórralo del servidor.**
+2. El `app/config/database.php` del servidor es el viejo y el `git pull` se aborta por conflicto. Arréglalo:
+   ```bash
+   # En la Terminal de cPanel, dentro de la carpeta del proyecto:
+   rm -f app/config/local.php
+   git checkout -- app/config/database.php   # descarta la versión vieja del servidor
+   git pull                                   # ahora trae la config correcta
+   ```
+   Sin Terminal: en el Administrador de archivos, borra `app/config/local.php` y edita
+   `app/config/database.php` con `DB_HOST=129.121.81.172`, `DB_NAME=neetjbte_londrescasadenovia`,
+   `DB_USER=neetjbte_londres`, `DB_PASS=Miguel#2026#`.
+
+**404 "Sorry, this page doesn't exist" (página del hosting)**
+Estás usando una URL con una subcarpeta que no existe (ej. `/londres-casanovia/...`). El proyecto está
+en la **raíz del subdominio**: entra a `https://tudominio.com/` (redirige a la tienda) o
+`https://tudominio.com/public/index.php`. Por eso `APP_URL` debe ser `''` (ya configurado).
+
+## 7. Notas
 
 - Tailwind, ApexCharts, SortableJS y las fuentes se cargan por CDN: el navegador del visitante necesita
   internet (no el servidor). Para máximo rendimiento se pueden auto-alojar más adelante.
