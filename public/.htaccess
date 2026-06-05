@@ -1,19 +1,4 @@
-# LONDRES Casa de Novias — sitio público
+# LONDRES Casa de Novias — carpeta public
+# El enrutamiento de URLs limpias se gestiona en el .htaccess de la raíz.
 Options -Indexes
 DirectoryIndex index.php
-
-<IfModule mod_rewrite.c>
-    RewriteEngine On
-
-    # Permitir acceso a archivos y carpetas reales (assets, uploads)
-    RewriteCond %{REQUEST_FILENAME} -f [OR]
-    RewriteCond %{REQUEST_FILENAME} -d
-    RewriteRule ^ - [L]
-
-    # URL amigable: /producto/mi-slug  ->  producto.php?slug=mi-slug
-    RewriteRule ^producto/([^/]+)/?$ producto.php?slug=$1 [L,QSA]
-
-    # Acceso sin extensión: /inventario -> inventario.php
-    RewriteCond %{REQUEST_FILENAME}.php -f
-    RewriteRule ^([^/.]+)/?$ $1.php [L,QSA]
-</IfModule>

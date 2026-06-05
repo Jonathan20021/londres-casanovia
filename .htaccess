@@ -1,18 +1,37 @@
-# LONDRES Casa de Novias — Apache (raíz del proyecto)
+# LONDRES Casa de Novias — URLs limpias (sin .php ni /public/)
+# Funciona tanto en la raíz del dominio como en una subcarpeta.
 
-Options -Indexes
+Options -Indexes -MultiViews
 DirectoryIndex index.php
 
-<IfModule mod_rewrite.c>
-    RewriteEngine On
-</IfModule>
-
-# Bloquear acceso directo a carpetas sensibles
-RedirectMatch 403 ^/?(app|storage|database)(/|$)
-
-# Cabeceras de seguridad básicas
 <IfModule mod_headers.c>
     Header set X-Content-Type-Options "nosniff"
     Header set X-Frame-Options "SAMEORIGIN"
     Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # --- Bloquear carpetas y archivos sensibles (antes de servir nada) ---
+    RewriteRule ^(app|storage|database)(/|$) - [F]
+    RewriteRule \.(md|sql|lock|bak|sh|ini)$ - [F]
+    RewriteRule (^|/)(composer\.(json|lock)|\.gitignore|\.env)$ - [F]
+
+    # --- Inicio: raíz -> tienda pública (antes de servir el directorio) ---
+    RewriteRule ^$ public/index.php [L]
+
+    # --- Servir archivos y carpetas reales tal cual (assets, uploads, *.php de AJAX) ---
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # --- Producto con slug bonito: /producto/<slug> ---
+    RewriteRule ^producto/([^/]+)/?$ public/producto.php?slug=$1 [L,QSA]
+
+    # --- Panel sin .php: /admin/loquesea -> admin/loquesea.php ---
+    RewriteRule ^(admin/.+?)/?$ $1.php [L,QSA]
+
+    # --- Páginas públicas sin .php ni /public/: /inventario -> public/inventario.php ---
+    RewriteRule ^([^/]+)/?$ public/$1.php [L,QSA]
 </IfModule>

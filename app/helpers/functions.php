@@ -16,10 +16,53 @@ function e($value): string
 /* ------------------------------------------------------------------ *
  *  Generación de URLs
  * ------------------------------------------------------------------ */
-function url(string $path = ''): string      { return APP_URL . '/' . ltrim($path, '/'); }
-function asset(string $path = ''): string     { return APP_URL . '/public/assets/' . ltrim($path, '/'); }
-function admin_url(string $path = ''): string { return APP_URL . '/admin/' . ltrim($path, '/'); }
-function pub_url(string $path = ''): string   { return APP_URL . '/public/' . ltrim($path, '/'); }
+function url(string $path = ''): string  { return APP_URL . '/' . ltrim($path, '/'); }
+function asset(string $path = ''): string { return APP_URL . '/public/assets/' . ltrim($path, '/'); }
+
+/**
+ * Normaliza una ruta a "URL limpia": separa la query, quita ".php" y
+ * convierte "index"/".../index" en la carpeta. Devuelve [ruta, query].
+ */
+function clean_route(string $path): array
+{
+    $path = ltrim($path, '/');
+    $qs = '';
+    if (($pos = strpos($path, '?')) !== false) {
+        $qs   = substr($path, $pos);
+        $path = substr($path, 0, $pos);
+    }
+    $isIndex = false;
+    $path = preg_replace('/\.php$/i', '', $path);
+    if ($path === 'index') {
+        $path = '';
+        $isIndex = true;
+    } elseif (substr($path, -6) === '/index') {
+        $path = substr($path, 0, -6);
+        $isIndex = true;
+    }
+    return [trim($path, '/'), $qs, $isIndex];
+}
+
+/** URL del panel sin ".php": admin_url('productos/crear.php') -> /admin/productos/crear */
+function admin_url(string $path = ''): string
+{
+    [$p, $qs, $isIndex] = clean_route($path);
+    $base = APP_URL . '/admin' . ($p !== '' ? '/' . $p : '');
+    if ($isIndex) $base .= '/';   // carpeta -> con barra final (evita el redirect 301)
+    return $base . $qs;
+}
+
+/** URL pública sin ".php" ni "/public/": pub_url('inventario.php') -> /inventario */
+function pub_url(string $path = ''): string
+{
+    // Producto con slug bonito: producto.php?slug=X -> /producto/X
+    if (preg_match('#^/?producto\.php\?slug=(.+)$#i', $path, $m)) {
+        return APP_URL . '/producto/' . $m[1];
+    }
+    [$p, $qs, $isIndex] = clean_route($path);
+    if ($p === '') return APP_URL . '/' . $qs;       // raíz pública
+    return APP_URL . '/' . $p . ($isIndex ? '/' : '') . $qs;
+}
 
 /** URL de una imagen subida; si está vacía devuelve un placeholder. */
 function upload_url(?string $path): string

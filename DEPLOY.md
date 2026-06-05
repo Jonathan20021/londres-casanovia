@@ -40,9 +40,13 @@ los archivos y dejar el sitio en línea.
 
 | URL | Descripción |
 |-----|-------------|
-| `https://tudominio.com/` | Redirige a la tienda pública |
-| `https://tudominio.com/public/index.php` | Sitio público |
-| `https://tudominio.com/admin/login.php` | Panel administrativo |
+| `https://tudominio.com/` | Tienda pública (sin `/public/` ni `.php`) |
+| `https://tudominio.com/inventario` · `/producto/<slug>` · `/contacto` | Páginas públicas |
+| `https://tudominio.com/admin/login` | Panel administrativo |
+
+> **URLs limpias:** la app usa `.htaccess` (mod_rewrite) para servir todo sin `.php` ni `/public/`.
+> Tu hosting ya tiene mod_rewrite activo (verificado). Si lo cambiaras de servidor, asegúrate de que
+> `AllowOverride All` y `mod_rewrite` estén habilitados, o las URLs limpias darán 404.
 
 **Acceso admin:** `admin@londresnovias.com` · `Admin12345`
 

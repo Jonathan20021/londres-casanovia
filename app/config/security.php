@@ -58,7 +58,7 @@ function verify_csrf(): bool
 function require_csrf(): void
 {
     if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && !verify_csrf()) {
-        http_response_code(419);
+        http_response_code(403);
         die('Token de seguridad inválido o expirado. Recargue la página e intente de nuevo.');
     }
 }
