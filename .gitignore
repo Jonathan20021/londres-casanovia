@@ -18,5 +18,5 @@
 Thumbs.db
 *.log
 
-# Instalador (no versionar credenciales tras instalar)
-# /app/config/database.php
+# Configuración local de desarrollo (NO subir a producción)
+/app/config/local.php

@@ -5,13 +5,21 @@
  */
 declare(strict_types=1);
 
-/* Credenciales — valores por defecto de XAMPP (root sin contraseña). */
-define('DB_HOST',    '127.0.0.1');
-define('DB_PORT',    '3306');
-define('DB_NAME',    'londres_casa_novias');
-define('DB_USER',    'root');
-define('DB_PASS',    '');
-define('DB_CHARSET', 'utf8mb4');
+/*
+ * Credenciales de PRODUCCIÓN por defecto.
+ * En desarrollo se sobrescriben desde app/config/local.php (que NO se sube
+ * al servidor). Por eso cada constante se define solo si no existe ya.
+ *
+ * Nota: en el hosting (cPanel) la app y la base suelen compartir servidor,
+ * por lo que el host es 'localhost'. Si tu app está en otro servidor, usa
+ * la IP pública 129.121.81.172.
+ */
+if (!defined('DB_HOST'))    define('DB_HOST',    'localhost');
+if (!defined('DB_PORT'))    define('DB_PORT',    '3306');
+if (!defined('DB_NAME'))    define('DB_NAME',    'neetjbte_londrescasadenovia');
+if (!defined('DB_USER'))    define('DB_USER',    'neetjbte_londres');
+if (!defined('DB_PASS'))    define('DB_PASS',    'Miguel#2026#');
+if (!defined('DB_CHARSET')) define('DB_CHARSET', 'utf8mb4');
 
 /**
  * Devuelve una única instancia de PDO compartida en toda la petición.
