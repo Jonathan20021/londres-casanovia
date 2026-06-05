@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 172" fill="none" aria-label="Londres">
+  <!-- Cabina telefónica de Londres -->
+  <g fill="#C8102E">
+    <!-- Corona / techo escalonado -->
+    <rect x="10" y="2"  width="80" height="11" rx="2.5"/>
+    <rect x="16" y="13" width="68" height="9"  rx="1.5"/>
+    <!-- Cuerpo -->
+    <rect x="13" y="22" width="74" height="138" rx="4"/>
+    <!-- Base -->
+    <rect x="7"  y="160" width="86" height="10" rx="2.5"/>
+  </g>
+  <!-- Ventanas (cuadrícula) -->
+  <g stroke="#F4E9D6" stroke-width="3" stroke-linecap="round" opacity="0.95">
+    <rect x="24" y="33" width="52" height="86" rx="2" fill="none"/>
+    <line x1="41.3" y1="33" x2="41.3" y2="119"/>
+    <line x1="58.6" y1="33" x2="58.6" y2="119"/>
+    <line x1="24" y1="54.5" x2="76" y2="54.5"/>
+    <line x1="24" y1="76"   x2="76" y2="76"/>
+    <line x1="24" y1="97.5" x2="76" y2="97.5"/>
+  </g>
+</svg>

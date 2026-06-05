@@ -1,0 +1,22 @@
+# Dependencias
+/vendor/
+
+# Subidas y almacenamiento generado
+/public/assets/uploads/*
+!/public/assets/uploads/.htaccess
+!/public/assets/uploads/products/
+!/public/assets/uploads/evidence/
+!/public/assets/uploads/business/
+/storage/logs/*
+/storage/invoices/*
+/storage/contracts/*
+/storage/backups/*
+!**/.gitkeep
+
+# Sistema
+.DS_Store
+Thumbs.db
+*.log
+
+# Instalador (no versionar credenciales tras instalar)
+# /app/config/database.php

@@ -1,0 +1,256 @@
+<?php
+/**
+ * Funciones de utilidad generales.
+ * LONDRES Casa de Novias
+ */
+declare(strict_types=1);
+
+/* ------------------------------------------------------------------ *
+ *  Escape / salida segura
+ * ------------------------------------------------------------------ */
+function e($value): string
+{
+    return htmlspecialchars((string) ($value ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+}
+
+/* ------------------------------------------------------------------ *
+ *  Generación de URLs
+ * ------------------------------------------------------------------ */
+function url(string $path = ''): string      { return APP_URL . '/' . ltrim($path, '/'); }
+function asset(string $path = ''): string     { return APP_URL . '/public/assets/' . ltrim($path, '/'); }
+function admin_url(string $path = ''): string { return APP_URL . '/admin/' . ltrim($path, '/'); }
+function pub_url(string $path = ''): string   { return APP_URL . '/public/' . ltrim($path, '/'); }
+
+/** URL de una imagen subida; si está vacía devuelve un placeholder. */
+function upload_url(?string $path): string
+{
+    if (empty($path)) {
+        return asset('img/placeholder.svg');
+    }
+    // Rutas guardadas como "uploads/products/x.jpg" (relativas a /assets)
+    if (str_starts_with($path, 'http')) return $path;
+    return asset(ltrim($path, '/'));
+}
+
+/* ------------------------------------------------------------------ *
+ *  Redirecciones
+ * ------------------------------------------------------------------ */
+function redirect(string $to): void
+{
+    header('Location: ' . $to);
+    exit;
+}
+
+function back(string $fallback = ''): void
+{
+    redirect($_SERVER['HTTP_REFERER'] ?? ($fallback ?: admin_url('dashboard.php')));
+}
+
+/* ------------------------------------------------------------------ *
+ *  Entrada
+ * ------------------------------------------------------------------ */
+/** GET sanitizado a string. */
+function get_param(string $key, string $default = ''): string
+{
+    return trim((string) ($_GET[$key] ?? $default));
+}
+
+/** POST sin sanitizar (se escapa al imprimir con e()). */
+function post(string $key, $default = null)
+{
+    return $_POST[$key] ?? $default;
+}
+
+function is_post(): bool { return ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST'; }
+
+/* ------------------------------------------------------------------ *
+ *  Slugs y números de documento
+ * ------------------------------------------------------------------ */
+function slugify(string $text): string
+{
+    $text = trim($text);
+    $map = ['á'=>'a','é'=>'e','í'=>'i','ó'=>'o','ú'=>'u','ñ'=>'n','ü'=>'u',
+            'Á'=>'a','É'=>'e','Í'=>'i','Ó'=>'o','Ú'=>'u','Ñ'=>'n','Ü'=>'u'];
+    $text = strtr($text, $map);
+    $text = preg_replace('/[^a-zA-Z0-9]+/', '-', $text);
+    $text = strtolower(trim($text, '-'));
+    return $text ?: 'item';
+}
+
+/** Garantiza un slug único en una tabla/columna. */
+function unique_slug(string $table, string $base, ?int $ignoreId = null): string
+{
+    $slug = slugify($base);
+    $i = 1;
+    while (true) {
+        $sql = "SELECT COUNT(*) FROM `$table` WHERE slug = :slug" . ($ignoreId ? " AND id <> :id" : '');
+        $params = ['slug' => $slug];
+        if ($ignoreId) $params['id'] = $ignoreId;
+        if ((int) db_value($sql, $params) === 0) return $slug;
+        $slug = slugify($base) . '-' . (++$i);
+    }
+}
+
+/**
+ * Genera un número correlativo tipo PREFIX-000123 basado en el conteo de la tabla.
+ */
+function generate_number(string $table, string $column, string $prefix, int $pad = 5): string
+{
+    $count = (int) db_value("SELECT COUNT(*) FROM `$table`") + 1;
+    do {
+        $candidate = sprintf('%s-%0' . $pad . 'd', $prefix, $count);
+        $exists = (int) db_value("SELECT COUNT(*) FROM `$table` WHERE `$column` = :n", ['n' => $candidate]);
+        $count++;
+    } while ($exists > 0);
+    return $candidate;
+}
+
+/* ------------------------------------------------------------------ *
+ *  Configuración del negocio (business_settings, fila id=1)
+ * ------------------------------------------------------------------ */
+function settings_all(): array
+{
+    static $row = null;
+    if ($row === null) {
+        $row = db_one('SELECT * FROM business_settings ORDER BY id ASC LIMIT 1') ?: [];
+    }
+    return $row;
+}
+
+function setting(string $key, $default = null)
+{
+    $row = settings_all();
+    if (array_key_exists($key, $row) && $row[$key] !== null && $row[$key] !== '') {
+        return $row[$key];
+    }
+    return $default;
+}
+
+/* ------------------------------------------------------------------ *
+ *  Formato
+ * ------------------------------------------------------------------ */
+function money($amount): string
+{
+    $currency = setting('currency', 'RD$');
+    return $currency . ' ' . number_format((float) $amount, 2, '.', ',');
+}
+
+function format_date($date, string $fmt = 'd/m/Y'): string
+{
+    if (empty($date) || $date === '0000-00-00' || $date === '0000-00-00 00:00:00') return '—';
+    try { return (new DateTime((string) $date))->format($fmt); }
+    catch (Exception $e) { return (string) $date; }
+}
+
+function format_datetime($date): string { return format_date($date, 'd/m/Y h:i A'); }
+
+/** Días entre dos fechas (puede ser negativo). */
+function days_between($from, $to): int
+{
+    try {
+        $a = new DateTime((string) $from);
+        $b = new DateTime((string) $to);
+        return (int) $a->diff($b)->format('%r%a');
+    } catch (Exception $e) { return 0; }
+}
+
+/* ------------------------------------------------------------------ *
+ *  Mensajes flash
+ * ------------------------------------------------------------------ */
+function flash(string $type, string $message): void
+{
+    $_SESSION['_flash'][$type] = $message;
+}
+
+function flash_get(string $type): ?string
+{
+    if (!empty($_SESSION['_flash'][$type])) {
+        $m = $_SESSION['_flash'][$type];
+        unset($_SESSION['_flash'][$type]);
+        return $m;
+    }
+    return null;
+}
+
+function flash_all(): array
+{
+    $f = $_SESSION['_flash'] ?? [];
+    unset($_SESSION['_flash']);
+    return $f;
+}
+
+/* ------------------------------------------------------------------ *
+ *  Respuestas JSON (APIs)
+ * ------------------------------------------------------------------ */
+function json_response($data, int $code = 200): void
+{
+    http_response_code($code);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode($data, JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ------------------------------------------------------------------ *
+ *  Registro de actividad y notificaciones
+ * ------------------------------------------------------------------ */
+function log_activity(string $action, ?string $entityType = null, ?int $entityId = null, string $description = ''): void
+{
+    try {
+        db_insert('activity_logs', [
+            'user_id'     => $_SESSION['user_id'] ?? null,
+            'action'      => $action,
+            'entity_type' => $entityType,
+            'entity_id'   => $entityId,
+            'description' => $description,
+            'ip_address'  => $_SERVER['REMOTE_ADDR'] ?? null,
+        ]);
+    } catch (Throwable $e) { /* nunca romper el flujo por un log */ }
+}
+
+function notify(?int $userId, string $title, string $message, string $type = 'info'): void
+{
+    try {
+        db_insert('notifications', [
+            'user_id' => $userId,
+            'title'   => $title,
+            'message' => $message,
+            'type'    => $type,
+        ]);
+    } catch (Throwable $e) { /* silencioso */ }
+}
+
+/** Notifica a todos los usuarios administradores activos. */
+function notify_admins(string $title, string $message, string $type = 'info'): void
+{
+    $admins = db_all("SELECT u.id FROM users u JOIN roles r ON r.id = u.role_id
+                      WHERE u.status = 'active' AND r.name IN ('Super Admin','Administrador')");
+    foreach ($admins as $a) {
+        notify((int) $a['id'], $title, $message, $type);
+    }
+}
+
+/* ------------------------------------------------------------------ *
+ *  Paginación: calcula offset/limit y metadatos
+ * ------------------------------------------------------------------ */
+function paginate(int $total, int $perPage = 12, string $pageParam = 'page'): array
+{
+    $perPage = max(1, $perPage);
+    $pages   = max(1, (int) ceil($total / $perPage));
+    $page    = max(1, min($pages, (int) ($_GET[$pageParam] ?? 1)));
+    return [
+        'page'    => $page,
+        'pages'   => $pages,
+        'perPage' => $perPage,
+        'offset'  => ($page - 1) * $perPage,
+        'total'   => $total,
+    ];
+}
+
+/** Construye una URL conservando los parámetros GET actuales + overrides. */
+function query_url(array $overrides = []): string
+{
+    $params = array_merge($_GET, $overrides);
+    $params = array_filter($params, fn($v) => $v !== '' && $v !== null);
+    $qs = http_build_query($params);
+    return strtok($_SERVER['REQUEST_URI'], '?') . ($qs ? '?' . $qs : '');
+}

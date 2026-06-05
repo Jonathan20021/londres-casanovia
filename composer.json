@@ -1,0 +1,19 @@
+{
+    "name": "londres/casa-novias",
+    "description": "Plataforma de alquiler y venta para LONDRES Casa de Novias (PHP puro + MySQL + Tailwind).",
+    "type": "project",
+    "license": "proprietary",
+    "require": {
+        "php": ">=8.1",
+        "ext-pdo": "*",
+        "ext-fileinfo": "*",
+        "ext-mbstring": "*",
+        "dompdf/dompdf": "^3.0"
+    },
+    "suggest": {
+        "dompdf/dompdf": "Para exportar facturas y contratos a PDF en servidor (opcional)."
+    },
+    "config": {
+        "optimize-autoloader": true
+    }
+}

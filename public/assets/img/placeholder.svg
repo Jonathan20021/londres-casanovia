@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F7F3EE"/>
+      <stop offset="1" stop-color="#EFE7DB"/>
+    </linearGradient>
+  </defs>
+  <rect width="600" height="800" fill="url(#bg)"/>
+  <!-- silueta de vestido -->
+  <g fill="none" stroke="#C9A86A" stroke-width="3" opacity="0.65">
+    <path d="M300 150c-22 0-40 18-40 40 0 14 7 26 18 33l-70 360c-6 30 16 57 47 57h90c31 0 53-27 47-57l-70-360c11-7 18-19 18-33 0-22-18-40-40-40z"/>
+    <path d="M262 230c20 22 56 22 76 0"/>
+  </g>
+  <text x="300" y="700" text-anchor="middle" font-family="Georgia, serif" font-size="30" letter-spacing="6" fill="#C8102E" opacity="0.85">LONDRES</text>
+  <text x="300" y="735" text-anchor="middle" font-family="Georgia, serif" font-size="18" fill="#9C8B73">Imagen no disponible</text>
+</svg>
