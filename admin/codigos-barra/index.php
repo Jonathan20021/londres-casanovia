@@ -100,7 +100,7 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
                 </div>
             </div>
 
-            <form method="get" action="<?= admin_url('codigos-barra/index.php') ?>" class="mt-4" autocomplete="off">
+            <form method="get" action="<?= admin_url('codigos-barra/index.php') ?>" class="mt-4" autocomplete="off" id="scanForm">
                 <label class="relative block">
                     <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-gray-400"><?= icon('tag', 'w-5 h-5') ?></span>
                     <input id="scanInput" type="text" name="scan" value="" inputmode="text" autocomplete="off"
@@ -114,7 +114,7 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
                     <?php if ($scan !== ''): ?>
                         <a href="<?= admin_url('codigos-barra/index.php') ?>" class="text-sm font-medium text-gray-500 hover:text-gray-900">Limpiar</a>
                     <?php endif; ?>
-                    <span class="ml-auto text-[11px] text-gray-400">Code 128 · compatible con cualquier lector</span>
+                    <span id="scanHint" class="ml-auto text-[11px] text-gray-400">Code 128 · compatible con cualquier lector</span>
                 </div>
             </form>
         </div>
@@ -332,9 +332,13 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
 <script>
 (function () {
     /* El foco vive en el campo del escáner: los lectores escriben como un teclado. */
-    var scanEl = document.getElementById('scanInput');
+    var scanEl   = document.getElementById('scanInput');
+    var scanForm = document.getElementById('scanForm');
+    var hint     = document.getElementById('scanHint');
+
     if (scanEl) {
         scanEl.focus();
+
         /* Si el usuario empieza a "teclear" muy rápido fuera de un campo (lector),
            reenfocamos el escáner para no perder la lectura. */
         var lastKey = 0;
@@ -347,6 +351,40 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
                 lastKey = now;
             }
         });
+
+        /*
+         * Envío automático: hay lectores que no envían Enter (o envían Tab).
+         * Si los caracteres llegan a velocidad de máquina (<50 ms entre pulsaciones)
+         * y luego hay 180 ms de silencio, se busca solo. Al teclear a mano (mucho
+         * más lento) no se dispara: ahí se usa Enter o el botón Buscar.
+         */
+        var prev = 0, fast = 0, timer = null, sent = false;
+
+        scanEl.addEventListener('keydown', function (ev) {
+            if (ev.key === 'Tab' && scanEl.value.trim().length >= 3) {
+                ev.preventDefault();
+                submit();
+            }
+        });
+
+        scanEl.addEventListener('input', function () {
+            var now = Date.now();
+            fast = (prev && now - prev < 50) ? fast + 1 : 0;
+            prev = now;
+
+            if (timer) clearTimeout(timer);
+            if (fast >= 3 && scanEl.value.trim().length >= 3) {
+                if (hint) hint.textContent = 'Lectura detectada…';
+                timer = setTimeout(submit, 180);
+            }
+        });
+
+        function submit() {
+            if (sent || !scanForm || scanEl.value.trim() === '') return;
+            sent = true;                                  // evita doble envío si además llega Enter
+            if (hint) hint.textContent = 'Buscando…';
+            scanForm.submit();
+        }
     }
 
     /* Selección por lote */
