@@ -262,6 +262,8 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
         </div>
 
         <label class="flex cursor-pointer items-center gap-2 pb-2.5 text-sm text-gray-600">
+            <!-- El hidden va antes: si la casilla queda sin marcar, se envía 0 -->
+            <input type="hidden" name="encabezado" value="0">
             <input type="checkbox" name="encabezado" value="1" checked class="h-4 w-4 rounded border-gray-300 text-brand-red focus:ring-brand-red/40">
             Encabezado de marca
         </label>
@@ -285,7 +287,7 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
                 $code  = (string) ($p['barcode'] ?? '');
                 $price = $p['type'] === 'sale' ? (float) ($p['sale_price'] ?? 0) : (float) $p['rental_price'];
             ?>
-                <label class="group relative flex cursor-pointer flex-col rounded-2xl border border-gray-100 bg-white p-4 shadow-soft transition hover:border-brand-red/30 has-[:checked]:border-brand-red has-[:checked]:ring-2 has-[:checked]:ring-brand-red/15">
+                <label data-card class="group relative flex cursor-pointer flex-col rounded-2xl border border-gray-100 bg-white p-4 shadow-soft transition hover:border-brand-red/30">
                     <div class="flex items-start gap-3">
                         <input type="checkbox" name="ids[]" value="<?= (int) $p['id'] ?>" data-item
                                class="mt-1 h-4 w-4 shrink-0 rounded border-gray-300 text-brand-red focus:ring-brand-red/40">
@@ -354,8 +356,18 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
     var items = form.querySelectorAll('[data-item]');
     var count = document.getElementById('selCount');
 
+    /* Resalta la tarjeta seleccionada (sin depender de variantes CSS modernas) */
+    function paint(box) {
+        var card = box.closest('[data-card]');
+        if (!card) return;
+        var on = ['border-brand-red', 'ring-2', 'ring-brand-red/15'];
+        on.forEach(function (c) { card.classList.toggle(c, box.checked); });
+        card.classList.toggle('border-gray-100', !box.checked);
+    }
+
     function refresh() {
         var n = form.querySelectorAll('[data-item]:checked').length;
+        items.forEach(paint);
         if (count) count.textContent = n + (n === 1 ? ' seleccionado' : ' seleccionados');
         if (all) {
             all.checked = n > 0 && n === items.length;

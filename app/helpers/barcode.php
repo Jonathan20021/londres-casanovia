@@ -367,11 +367,18 @@ function barcode_png(string $code, array $o = []): ?string
     return $png;
 }
 
-/** Data-URI PNG lista para <img src="…"> dentro de un PDF (Dompdf). */
+/**
+ * Data-URI PNG lista para <img src="…"> dentro de un PDF (Dompdf).
+ * Se memoriza: en un lote con copias repetidas evita regenerar la misma imagen.
+ */
 function barcode_png_uri(string $code, array $o = []): string
 {
+    static $cache = [];
+    $key = $code . '|' . ($o['module'] ?? 3) . '|' . ($o['height'] ?? 110) . '|' . ($o['quiet'] ?? 10);
+    if (isset($cache[$key])) return $cache[$key];
+
     $png = barcode_png($code, $o);
-    return $png !== null ? 'data:image/png;base64,' . base64_encode($png) : '';
+    return $cache[$key] = ($png !== null ? 'data:image/png;base64,' . base64_encode($png) : '');
 }
 
 /**

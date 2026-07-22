@@ -117,6 +117,25 @@ foreach ($products as $p) {
     }
 }
 
+/*
+ * Tope de seguridad: un PDF con miles de etiquetas agotaría la memoria o el
+ * tiempo del servidor. Se avisa en lugar de recortar en silencio.
+ */
+$maxLabels = 1500;
+if (count($labels) > $maxLabels) {
+    flash('error', sprintf(
+        'Son %s etiquetas (%d productos × %d copias) y el máximo por PDF es %s. Filtre los productos o reduzca las copias.',
+        number_format(count($labels)), count($products), $copies, number_format($maxLabels)
+    ));
+    redirect(admin_url('codigos-barra/index.php'));
+}
+
+/* Los lotes grandes necesitan algo más de holgura que el valor por defecto */
+if (count($labels) > 150) {
+    @set_time_limit(180);
+    @ini_set('memory_limit', '512M');
+}
+
 $docTitle = count($products) === 1
     ? 'Código de barras · ' . $products[0]['name']
     : 'Códigos de barra · ' . count($products) . ' productos';
