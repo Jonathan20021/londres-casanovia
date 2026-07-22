@@ -19,6 +19,7 @@ $menu = [
     ['type' => 'group', 'label' => 'Inventario', 'icon' => 'box', 'children' => [
         ['key' => 'productos',  'label' => 'Productos',  'url' => admin_url('productos/index.php'),  'perm' => 'products.view'],
         ['key' => 'categorias', 'label' => 'Categorías', 'url' => admin_url('categorias/index.php'), 'perm' => 'categories.manage'],
+        ['key' => 'codigos-barra', 'label' => 'Códigos de barra', 'url' => admin_url('codigos-barra/index.php'), 'perm' => 'products.view'],
     ]],
     ['type' => 'group', 'label' => 'Alquileres', 'icon' => 'calendar', 'children' => [
         ['key' => 'alquileres',  'label' => 'Lista',       'url' => admin_url('alquileres/index.php'),       'perm' => 'rentals.manage'],

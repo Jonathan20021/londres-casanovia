@@ -26,6 +26,12 @@ if (!$product) {
 
 $canManage = user_can('products.manage');
 
+/* Código de barras (se crea al vuelo si el producto es anterior a esta función) */
+$productBarcode = (string) ($product['barcode'] ?? '');
+if ($productBarcode === '') {
+    $productBarcode = barcode_assign($id);
+}
+
 /* Imágenes (principal primero) */
 $images = db_all('SELECT * FROM product_images WHERE product_id = :id ORDER BY is_main DESC, sort_order ASC, id ASC', ['id' => $id]);
 $mainImage = $product['main_image'] ?: ($images[0]['image_path'] ?? null);
@@ -49,7 +55,7 @@ $saleCount   = (int) db_value('SELECT COUNT(*) FROM sales WHERE product_id = :id
 $typeLabels = ['rental' => 'Alquiler', 'sale' => 'Venta', 'both' => 'Alquiler y venta'];
 
 $page_title    = $product['name'];
-$page_subtitle = 'Detalle del producto · ' . ($product['sku'] ? 'SKU ' . $product['sku'] : 'Sin SKU');
+$page_subtitle = 'Detalle del producto · ' . ($product['sku'] ? 'SKU ' . $product['sku'] : 'Sin SKU') . ' · Código ' . $productBarcode;
 $active        = 'productos';
 
 $header_actions = '<a href="' . admin_url('productos/index.php') . '" class="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50">'
@@ -70,6 +76,37 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
             <div class="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-soft">
                 <div class="aspect-[3/4] w-full bg-gray-100">
                     <img id="mainView" src="<?= e(upload_url($mainImage)) ?>" alt="<?= e($product['name']) ?>" class="h-full w-full object-cover">
+                </div>
+            </div>
+
+            <!-- Código de barras -->
+            <div class="rounded-2xl border border-gray-100 bg-white p-5 shadow-soft">
+                <div class="mb-3 flex items-center justify-between">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Código de barras</p>
+                    <span class="font-mono text-[11px] tracking-widest text-gray-500">Code 128</span>
+                </div>
+                <div class="rounded-xl border border-gray-100 px-3 py-3">
+                    <?= barcode_svg($productBarcode, ['module' => 1.7, 'height' => 52]) ?>
+                </div>
+                <div class="mt-3 flex flex-wrap items-center gap-2">
+                    <a href="<?= admin_url('codigos-barra/exportar.php?ids=' . $id) ?>"
+                       class="inline-flex items-center gap-1.5 rounded-lg bg-brand-dark px-3 py-2 text-xs font-semibold text-white transition hover:bg-black">
+                        <?= icon('printer', 'w-4 h-4') ?> Imprimir etiqueta
+                    </a>
+                    <a href="<?= admin_url('codigos-barra/index.php?q=' . urlencode($productBarcode)) ?>"
+                       class="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-600 transition hover:bg-gray-50">
+                        <?= icon('tag', 'w-4 h-4') ?> Módulo
+                    </a>
+                    <?php if ($canManage): ?>
+                        <form method="post" action="<?= admin_url('codigos-barra/regenerar.php') ?>" class="inline"
+                              onsubmit="return confirm('¿Regenerar el código de barras? Las etiquetas ya impresas dejarán de coincidir.');">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="id" value="<?= $id ?>">
+                            <button type="submit" class="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-600 transition hover:bg-gray-50">
+                                <?= icon('return', 'w-4 h-4') ?> Regenerar
+                            </button>
+                        </form>
+                    <?php endif; ?>
                 </div>
             </div>
 

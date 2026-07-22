@@ -168,6 +168,12 @@ $categories = db_all("SELECT id, name FROM categories WHERE status = 'active' OR
 $images = db_all('SELECT * FROM product_images WHERE product_id = :id ORDER BY sort_order ASC, id ASC', ['id' => $id]);
 $mainImage = $product['main_image'] ?: ($images[0]['image_path'] ?? null);
 
+/* Código de barras del producto (se asigna si aún no lo tenía) */
+$productBarcode = (string) ($product['barcode'] ?? '');
+if ($productBarcode === '') {
+    $productBarcode = barcode_assign($id);
+}
+
 $page_title    = 'Editar producto';
 $page_subtitle = $product['name'];
 $active        = 'productos';
@@ -197,6 +203,21 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
                     <p class="mt-2 text-lg font-semibold text-gray-900" data-preview-price>—</p>
                     <div class="mt-3 flex flex-wrap gap-2" data-preview-chips></div>
                 </div>
+            </div>
+
+            <!-- Código de barras -->
+            <div class="rounded-2xl border border-gray-100 bg-white p-6 shadow-soft">
+                <div class="mb-3 flex items-center justify-between">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Código de barras</p>
+                    <span class="font-mono text-[11px] tracking-widest text-gray-500"><?= e($productBarcode) ?></span>
+                </div>
+                <div class="rounded-xl border border-gray-100 px-3 py-3">
+                    <?= barcode_svg($productBarcode, ['module' => 1.6, 'height' => 48]) ?>
+                </div>
+                <a href="<?= admin_url('codigos-barra/exportar.php?ids=' . $id) ?>"
+                   class="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 transition hover:bg-gray-50">
+                    <?= icon('printer', 'w-4 h-4') ?> Imprimir etiqueta
+                </a>
             </div>
 
             <div class="flex items-center gap-3">

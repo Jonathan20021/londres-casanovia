@@ -35,6 +35,13 @@ los archivos y dejar el sitio en línea.
 5. **Borra `install.php`** del servidor por seguridad.
 6. (Opcional, para PDF en servidor) ejecuta `composer install` en el servidor para tener `vendor/`
    (Dompdf). Sin esto, el botón "Descargar PDF" abre la versión imprimible del navegador.
+7. **Migración de códigos de barra** (sólo si la base de datos ya existía antes de esta versión):
+   importa una única vez `database/migrations/2026_07_22_barcodes.sql` desde phpMyAdmin o con
+   `mysql -h HOST -u USER -p -D BD --default-character-set=utf8mb4 < database/migrations/2026_07_22_barcodes.sql`.
+   Añade `products.barcode` y `business_settings.barcode_prefix`; los productos existentes reciben
+   su código automáticamente al abrir *Inventario → Códigos de barra*.
+   Las etiquetas usan la extensión **GD** de PHP (activa por defecto en cPanel); si no estuviera,
+   el PDF dibuja las barras igualmente con un método alterno.
 
 ## 4. Acceso
 

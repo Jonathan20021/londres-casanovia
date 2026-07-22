@@ -135,9 +135,10 @@ calculateRentalPayments($total, $percentage = 50) // => ['total','percentage','i
 
 ## 🧩 Módulos incluidos
 
-Autenticación · Dashboard · Productos/Inventario · Imágenes · Categorías · Clientes · Alquileres ·
-Disponibilidad · Calendario · Solicitudes públicas · Facturas · Pagos (50/50) · Ventas ·
-Entregas/Devoluciones · Reportes (CSV) · Usuarios y roles · Configuración · Notificaciones.
+Autenticación · Dashboard · Productos/Inventario · Imágenes · Categorías · **Códigos de barra** ·
+Clientes · Alquileres · Disponibilidad · Calendario · Solicitudes públicas · Facturas ·
+Pagos (50/50) · Ventas · Entregas/Devoluciones · Reportes (CSV) · Usuarios y roles ·
+Configuración · Notificaciones.
 
 ---
 
@@ -166,6 +167,35 @@ Cada documento se puede **ver/imprimir** en pantalla (HTML con estilos `@media p
   auto‑impresión para *Guardar como PDF* desde el navegador (mismo diseño, CSS en línea).
 - Plantillas PDF autocontenidas en `app/views/templates/pdf/` (factura, recibo, contrato),
   con tipografía que conserva los acentos.
+
+---
+
+## 🏷️ Códigos de barra
+
+Cada producto recibe **automáticamente** un código único al registrarse — se previsualiza en el
+formulario de alta y queda visible en la ficha y en la edición del producto.
+
+- **Simbología:** Code 128 (subconjunto B), el estándar para códigos internos. Lo leen todos los
+  lectores del mercado: láser 1D, CCD e imagers 2D inalámbricos (2CONNET 2C‑SC1100W‑2D y similares),
+  además de apps de móvil.
+- **Formato del valor:** `PREFIJO` + id a 6 dígitos (ej. `LCN000042`). Sólo A‑Z y 0‑9 — sin símbolos —
+  para que ningún lector con otra distribución de teclado envíe un carácter distinto.
+  El prefijo se cambia en *Configuración → Prefijo de código de barras*.
+- **Módulo:** `Admin → Inventario → Códigos de barra`. Incluye escáner en vivo (el cursor queda
+  enfocado; el lector escribe el código y confirma con Enter → aparece la ficha del producto),
+  filtros, selección múltiple y exportación.
+- **Exportación PDF (Dompdf)** con la marca del sistema, individual o por lote:
+  | Formato | Etiquetas por hoja A4 | X‑dimension | Uso |
+  |---|---|---|---|
+  | Grande  | 2 × 5 = 10 | ≈ 0.55 mm (21 mil) | Vestidos y trajes (etiqueta colgante) |
+  | Mediana | 3 × 7 = 21 | ≈ 0.37 mm (14 mil) | Uso general de inventario |
+  | Pequeña | 4 × 10 = 40 | ≈ 0.27 mm (11 mil) | Accesorios, velos, coronas |
+
+  Se puede elegir el número de copias por producto (1–50) y activar/desactivar la banda de marca.
+  Imprima **al 100% (sin “ajustar a página”)** para conservar el ancho de las barras.
+- **Migración:** en una instalación existente ejecute una sola vez
+  `database/migrations/2026_07_22_barcodes.sql`. Los productos ya creados reciben su código
+  automáticamente al entrar al módulo. En instalaciones nuevas ya viene en `schema.sql`.
 
 ---
 

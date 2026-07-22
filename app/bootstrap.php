@@ -33,3 +33,4 @@ require_once LCN_ROOT . '/app/helpers/availability.php';
 require_once LCN_ROOT . '/app/helpers/upload.php';
 require_once LCN_ROOT . '/app/helpers/ui.php';
 require_once LCN_ROOT . '/app/helpers/pdf.php';
+require_once LCN_ROOT . '/app/helpers/barcode.php';

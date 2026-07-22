@@ -34,7 +34,7 @@ if (!in_array($view, ['grid', 'list'], true))  $view = 'grid';
 $where  = [];
 $params = [];
 if ($q !== '') {
-    $where[] = '(p.name LIKE :q OR p.sku LIKE :q OR p.color LIKE :q)';
+    $where[] = '(p.name LIKE :q OR p.sku LIKE :q OR p.barcode LIKE :q OR p.color LIKE :q)';
     $params['q'] = '%' . $q . '%';
 }
 if ($categoryId > 0) { $where[] = 'p.category_id = :cat'; $params['cat'] = $categoryId; }
@@ -112,7 +112,7 @@ $radioCls = 'h-4 w-4 border-gray-300 text-brand-red focus:ring-brand-red/40';
                 <label class="lcn-label" for="f-q">Buscar</label>
                 <label class="relative block">
                     <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400"><?= icon('search', 'w-4 h-4') ?></span>
-                    <input id="f-q" type="search" name="q" value="<?= e($q) ?>" placeholder="Nombre, SKU o color…" class="lcn-input pl-9 text-sm">
+                    <input id="f-q" type="search" name="q" value="<?= e($q) ?>" placeholder="Nombre, SKU, código o color…" class="lcn-input pl-9 text-sm">
                 </label>
             </div>
 

@@ -151,8 +151,11 @@ if (is_post()) {
                 }
             }
 
-            log_activity('product.create', 'product', $productId, 'Producto creado: ' . $form['name']);
-            flash('success', 'Producto creado correctamente.');
+            /* Código de barras automático (Code 128) */
+            $newBarcode = barcode_assign($productId);
+
+            log_activity('product.create', 'product', $productId, 'Producto creado: ' . $form['name'] . ' · código ' . $newBarcode);
+            flash('success', 'Producto creado correctamente. Código de barras asignado: ' . $newBarcode);
             redirect(admin_url('productos/ver.php?id=' . $productId));
         }
     }
@@ -164,6 +167,9 @@ if (is_post()) {
 
 /* Categorías para el select */
 $categories = db_all("SELECT id, name FROM categories WHERE status = 'active' ORDER BY name ASC");
+
+/* Código de barras que se asignará automáticamente al guardar */
+$nextBarcode = barcode_next_preview();
 
 $page_title    = 'Crear producto';
 $page_subtitle = 'Añade un nuevo artículo al inventario';
@@ -194,6 +200,23 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
                     <p class="mt-2 text-lg font-semibold text-gray-900" data-preview-price>—</p>
                     <div class="mt-3 flex flex-wrap gap-2" data-preview-chips></div>
                 </div>
+            </div>
+
+            <!-- Código de barras automático -->
+            <div class="rounded-2xl border border-gray-100 bg-white p-6 shadow-soft">
+                <div class="mb-3 flex items-center justify-between">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Código de barras</p>
+                    <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">Automático</span>
+                </div>
+                <div class="rounded-xl border border-gray-100 bg-white px-3 py-3">
+                    <?= barcode_svg($nextBarcode, ['module' => 1.6, 'height' => 48]) ?>
+                </div>
+                <p class="mt-3 text-xs leading-relaxed text-gray-500">
+                    Al guardar, el sistema asignará el código
+                    <strong class="font-mono text-gray-800"><?= e($nextBarcode) ?></strong>
+                    (Code 128, legible por cualquier lector). Podrá imprimir su etiqueta desde
+                    <a href="<?= admin_url('codigos-barra/index.php') ?>" class="font-medium text-brand-red hover:underline">Códigos de barra</a>.
+                </p>
             </div>
 
             <div class="flex items-center gap-3">

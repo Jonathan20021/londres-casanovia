@@ -30,6 +30,7 @@ if (is_post()) {
         'return_policy'  => trim((string) post('return_policy', '')),
         'currency'       => trim((string) post('currency', 'RD$')),
         'invoice_prefix' => trim((string) post('invoice_prefix', 'FAC')),
+        'barcode_prefix' => strtoupper(preg_replace('/[^A-Za-z0-9]/', '', (string) post('barcode_prefix', 'LCN')) ?? ''),
         'primary_color'  => trim((string) post('primary_color', '#C8102E')),
     ];
 
@@ -52,6 +53,10 @@ if (is_post()) {
     if ($data['invoice_prefix'] === '') {
         $data['invoice_prefix'] = 'FAC';
     }
+    if ($data['barcode_prefix'] === '') {
+        $data['barcode_prefix'] = 'LCN';
+    }
+    $data['barcode_prefix'] = substr($data['barcode_prefix'], 0, 6);
 
     // Logo (opcional)
     $logoError = null;
@@ -237,6 +242,12 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
             <div>
                 <label for="invoice_prefix" class="lcn-label">Prefijo de factura</label>
                 <input type="text" id="invoice_prefix" name="invoice_prefix" value="<?= e($val('invoice_prefix', 'FAC')) ?>" class="lcn-input" placeholder="FAC">
+            </div>
+            <div>
+                <label for="barcode_prefix" class="lcn-label">Prefijo de código de barras</label>
+                <input type="text" id="barcode_prefix" name="barcode_prefix" value="<?= e($val('barcode_prefix', 'LCN')) ?>"
+                       maxlength="6" class="lcn-input uppercase" placeholder="LCN">
+                <p class="mt-1 text-xs text-gray-400">Sólo letras y números. Se aplica a los códigos que se generen a partir de ahora.</p>
             </div>
             <div class="sm:col-span-2">
                 <label for="primary_color" class="lcn-label">Color principal de marca</label>
