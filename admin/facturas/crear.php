@@ -122,10 +122,12 @@ if (is_post()) {
 $customers = db_all('SELECT id, full_name, phone FROM customers ORDER BY full_name ASC');
 
 $rentals = db_all(
-    "SELECT r.id, r.rental_number, r.total_amount, c.full_name AS customer_name, p.name AS product_name
+    "SELECT r.id, r.rental_number, r.total_amount, c.full_name AS customer_name,
+            (SELECT GROUP_CONCAT(p2.name ORDER BY ri.sort_order SEPARATOR ', ')
+             FROM rental_items ri JOIN products p2 ON p2.id = ri.product_id
+             WHERE ri.rental_id = r.id) AS product_name
      FROM rentals r
      JOIN customers c ON c.id = r.customer_id
-     JOIN products  p ON p.id = r.product_id
      ORDER BY r.created_at DESC
      LIMIT 200"
 );

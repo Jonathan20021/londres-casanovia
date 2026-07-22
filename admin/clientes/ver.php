@@ -35,7 +35,8 @@ $salesCount   = (int) db_value('SELECT COUNT(*) FROM sales   WHERE customer_id =
  *  Historiales
  * ----------------------------------------------------------------- */
 $rentals = db_all(
-    "SELECT r.*, p.name AS product_name
+    "SELECT r.*, p.name AS product_name,
+            (SELECT COUNT(*) FROM rental_items ric WHERE ric.rental_id = r.id) AS product_count
        FROM rentals r
        JOIN products p ON p.id = r.product_id
       WHERE r.customer_id = :id
@@ -203,7 +204,7 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
                             <?php foreach ($rentals as $r): ?>
                                 <tr class="hover:bg-gray-50/60">
                                     <td class="px-5 py-4 font-medium text-gray-900"><?= e($r['rental_number']) ?></td>
-                                    <td class="px-5 py-4 text-gray-700"><?= e($r['product_name']) ?></td>
+                                    <td class="px-5 py-4 text-gray-700"><?= e($r['product_name']) ?><?= (int) $r['product_count'] > 1 ? ' +' . ((int) $r['product_count'] - 1) : '' ?></td>
                                     <td class="px-5 py-4 text-gray-700">
                                         <span class="block text-xs text-gray-400">Entrega</span>
                                         <span><?= e(format_date($r['delivery_date'])) ?></span>

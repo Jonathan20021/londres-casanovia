@@ -20,16 +20,10 @@ if (!$rental) {
     redirect(admin_url('alquileres/index.php'));
 }
 
-/* Cliente y producto del alquiler */
+/* Cliente y productos del alquiler */
 $customer = db_one('SELECT * FROM customers WHERE id = :id', ['id' => (int) $rental['customer_id']]) ?: [];
-
-$product = db_one(
-    'SELECT pr.*, cat.name AS category_name
-     FROM products pr
-     LEFT JOIN categories cat ON cat.id = pr.category_id
-     WHERE pr.id = :id',
-    ['id' => (int) $rental['product_id']]
-) ?: [];
+$products = rental_items_details($id);
+$product = $products[0] ?? [];
 
 /* Datos del negocio para el partial */
 $business = settings_all();

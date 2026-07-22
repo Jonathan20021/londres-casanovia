@@ -76,14 +76,15 @@ $sql = "SELECT r.id, r.rental_number, r.delivery_date, r.return_date, r.event_da
                c.id AS customer_id, c.full_name AS customer_name,
                p.id AS product_id, p.name AS product_name, p.category_id
         FROM rentals r
+        JOIN rental_items ri ON ri.rental_id = r.id
         JOIN customers c ON c.id = r.customer_id
-        JOIN products  p ON p.id = r.product_id
+        JOIN products  p ON p.id = ri.product_id
         WHERE r.rental_status IN ($statusIn)
           AND r.delivery_date <= ?
           AND r.return_date   >= ?";
 $params = array_merge($calendarStatuses, [$monthEnd, $monthStart]);
 
-if ($fProduct > 0)  { $sql .= ' AND r.product_id = ?';  $params[] = $fProduct; }
+if ($fProduct > 0)  { $sql .= ' AND ri.product_id = ?'; $params[] = $fProduct; }
 if ($fCategory > 0) { $sql .= ' AND p.category_id = ?'; $params[] = $fCategory; }
 if ($fStatus !== '') { $sql .= ' AND r.rental_status = ?'; $params[] = $fStatus; }
 if ($fCustomer > 0) { $sql .= ' AND r.customer_id = ?'; $params[] = $fCustomer; }

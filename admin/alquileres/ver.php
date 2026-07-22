@@ -49,12 +49,14 @@ if (is_post()) {
             redirect(admin_url('alquileres/ver.php?id=' . $id));
         }
 
-        // Si las fechas siguen bloqueando, re-validar disponibilidad (excluyendo este alquiler)
+        // Si las fechas siguen bloqueando, re-validar todas las piezas (excluyendo este alquiler)
         if (in_array($new, RENTAL_BLOCKING_STATUSES, true)) {
-            $check = checkProductAvailability((int) $r['product_id'], $r['delivery_date'], $r['return_date'], $id);
-            if (!$check['available']) {
-                flash('error', 'No se puede aplicar el estado: el producto tiene un conflicto de fechas con otro alquiler.');
-                redirect(admin_url('alquileres/ver.php?id=' . $id));
+            foreach (rental_product_ids($id) as $productId) {
+                $check = checkProductAvailability($productId, $r['delivery_date'], $r['return_date'], $id);
+                if (!$check['available']) {
+                    flash('error', 'No se puede aplicar el estado: una de las piezas tiene un conflicto de fechas con otro alquiler.');
+                    redirect(admin_url('alquileres/ver.php?id=' . $id));
+                }
             }
         }
 
@@ -70,7 +72,7 @@ if (is_post()) {
             'cancelled'      => 'available',
         ];
         if (isset($commercialMap[$new])) {
-            db_update('products', ['commercial_status' => $commercialMap[$new]], 'id = :id', ['id' => $r['product_id']]);
+            sync_rental_products_status($id, $commercialMap[$new]);
         }
 
         log_activity('rental.status', 'rental', $id, 'Estado de ' . $r['rental_number'] . ' → ' . $new);
@@ -138,6 +140,8 @@ if (!$rental) {
     redirect(admin_url('alquileres/index.php'));
 }
 
+$rentalItems = rental_items_details($id);
+
 $paid    = rental_paid_amount($id);
 $balance = round((float) $rental['total_amount'] - $paid, 2);
 $today   = date('Y-m-d');
@@ -187,7 +191,7 @@ $currentIdx = $orderIndex[$rental['rental_status']] ?? -1;
 $isCancelled = $rental['rental_status'] === 'cancelled';
 
 $page_title    = 'Alquiler ' . $rental['rental_number'];
-$page_subtitle = $rental['customer_name'] . ' · ' . $rental['product_name'];
+$page_subtitle = $rental['customer_name'] . ' · ' . count($rentalItems) . (count($rentalItems) === 1 ? ' producto' : ' productos');
 $active        = 'alquileres';
 
 $header_actions  = '<a href="' . admin_url('alquileres/index.php') . '" class="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50">' . icon('chevron-left', 'w-4 h-4') . ' Volver</a>';
@@ -269,28 +273,39 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
             <?php endif; ?>
         </div>
 
-        <!-- Producto -->
+        <!-- Productos -->
         <div class="rounded-2xl border border-gray-100 bg-white p-6 shadow-soft">
-            <h2 class="font-serif text-lg font-bold text-gray-900">Producto</h2>
-            <div class="mt-4 flex flex-col gap-4 sm:flex-row">
-                <img src="<?= e(upload_url($rental['product_image'])) ?>" alt="<?= e($rental['product_name']) ?>"
-                     class="h-40 w-32 flex-none rounded-xl object-cover ring-1 ring-gray-100">
-                <div class="flex-1">
-                    <div class="flex items-center gap-2">
-                        <h3 class="font-serif text-lg text-gray-900"><?= e($rental['product_name']) ?></h3>
-                        <?= status_badge($rental['product_status'], 'commercial') ?>
+            <div class="flex items-center justify-between gap-3">
+                <h2 class="font-serif text-lg font-bold text-gray-900">Productos</h2>
+                <span class="rounded-full bg-brand-cream px-3 py-1 text-xs font-semibold text-brand-red"><?= count($rentalItems) ?> pieza(s)</span>
+            </div>
+            <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <?php foreach ($rentalItems as $item): ?>
+                    <div class="flex gap-3 rounded-2xl border border-gray-100 bg-gray-50/50 p-3">
+                        <img src="<?= e(upload_url($item['main_image'] ?? null)) ?>" alt="<?= e($item['name']) ?>"
+                             class="h-28 w-24 flex-none rounded-xl object-cover bg-white ring-1 ring-gray-100">
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-start justify-between gap-2">
+                                <h3 class="font-serif text-base text-gray-900"><?= e($item['name']) ?></h3>
+                                <?= status_badge($item['commercial_status'], 'commercial') ?>
+                            </div>
+                            <p class="text-xs text-brand-red"><?= e($item['category_name'] ?? 'General') ?></p>
+                            <p class="mt-2 text-xs text-gray-500">
+                                <?= e(implode(' · ', array_filter([
+                                    $item['barcode'] ?? $item['sku'] ?? '',
+                                    !empty($item['size']) ? 'Talla ' . $item['size'] : '',
+                                    $item['color'] ?? '',
+                                ]))) ?>
+                            </p>
+                            <div class="mt-3 flex items-center justify-between gap-2">
+                                <span class="text-sm font-semibold text-gray-900"><?= e(money($item['unit_price'])) ?></span>
+                                <a href="<?= admin_url('productos/ver.php?id=' . (int) $item['id']) ?>" class="inline-flex items-center gap-1 text-xs font-medium text-brand-red hover:underline">
+                                    <?= icon('eye', 'w-3.5 h-3.5') ?> Ver ficha
+                                </a>
+                            </div>
+                        </div>
                     </div>
-                    <p class="text-sm text-brand-red"><?= e($rental['category_name'] ?? 'General') ?></p>
-                    <dl class="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-                        <?php if ($rental['product_sku']): ?><div class="flex justify-between"><dt class="text-gray-400">SKU</dt><dd class="font-medium text-gray-700"><?= e($rental['product_sku']) ?></dd></div><?php endif; ?>
-                        <?php if ($rental['product_size']): ?><div class="flex justify-between"><dt class="text-gray-400">Talla</dt><dd class="font-medium text-gray-700"><?= e($rental['product_size']) ?></dd></div><?php endif; ?>
-                        <?php if ($rental['product_color']): ?><div class="flex justify-between"><dt class="text-gray-400">Color</dt><dd class="font-medium text-gray-700"><?= e($rental['product_color']) ?></dd></div><?php endif; ?>
-                    </dl>
-                    <a href="<?= pub_url('producto.php?slug=' . e($rental['product_slug'])) ?>" target="_blank"
-                       class="mt-3 inline-flex items-center gap-1 text-sm font-medium text-brand-red hover:underline">
-                        <?= icon('eye', 'w-4 h-4') ?> Ver ficha pública
-                    </a>
-                </div>
+                <?php endforeach; ?>
             </div>
         </div>
 

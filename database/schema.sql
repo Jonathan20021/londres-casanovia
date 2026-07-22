@@ -16,6 +16,7 @@ DROP TABLE IF EXISTS `activity_logs`;
 DROP TABLE IF EXISTS `payments`;
 DROP TABLE IF EXISTS `invoices`;
 DROP TABLE IF EXISTS `rental_evidence`;
+DROP TABLE IF EXISTS `rental_items`;
 DROP TABLE IF EXISTS `rentals`;
 DROP TABLE IF EXISTS `rental_requests`;
 DROP TABLE IF EXISTS `sales`;
@@ -233,6 +234,20 @@ CREATE TABLE `rentals` (
     CONSTRAINT `fk_rentals_product`  FOREIGN KEY (`product_id`)  REFERENCES `products`(`id`)  ON DELETE CASCADE,
     CONSTRAINT `fk_rentals_request`  FOREIGN KEY (`request_id`)  REFERENCES `rental_requests`(`id`) ON DELETE SET NULL,
     CONSTRAINT `fk_rentals_user`     FOREIGN KEY (`created_by`)  REFERENCES `users`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `rental_items` (
+    `id`         INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `rental_id`  INT UNSIGNED NOT NULL,
+    `product_id` INT UNSIGNED NOT NULL,
+    `unit_price` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    `sort_order` INT NOT NULL DEFAULT 0,
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uq_rental_items_product` (`rental_id`, `product_id`),
+    KEY `idx_rental_items_product` (`product_id`, `rental_id`),
+    CONSTRAINT `fk_ri_rental`  FOREIGN KEY (`rental_id`)  REFERENCES `rentals`(`id`)  ON DELETE CASCADE,
+    CONSTRAINT `fk_ri_product` FOREIGN KEY (`product_id`) REFERENCES `products`(`id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `rental_evidence` (

@@ -28,6 +28,9 @@ if (!$rental) {
     redirect(admin_url('alquileres/index.php'));
 }
 
+$rentalItems = rental_items_details($id);
+$rentalProductNames = implode(', ', array_column($rentalItems, 'name'));
+
 // Estados a los que se puede transicionar desde la edición
 $statusOptions = ['reserved','confirmed','delivered','pending_return','returned','cancelled'];
 
@@ -98,17 +101,22 @@ if (is_post()) {
     $blocking = in_array($form['rental_status'], RENTAL_BLOCKING_STATUSES, true);
 
     if (!$errors && $blocking && $datesChanged) {
-        $check = checkProductAvailability(
-            (int) $rental['product_id'],
-            $form['delivery_date'],
-            $form['return_date'],
-            $id // excluir el propio alquiler
-        );
-        if (!empty($check['error'])) {
-            $errors[] = $check['error'];
-        } elseif (!$check['available']) {
-            $conflict = $check['conflict'];
-            flash('error', 'El producto no está disponible para las nuevas fechas. Revise el conflicto indicado.');
+        foreach (rental_product_ids($id) as $productId) {
+            $check = checkProductAvailability(
+                $productId,
+                $form['delivery_date'],
+                $form['return_date'],
+                $id // excluir el propio alquiler
+            );
+            if (!empty($check['error'])) {
+                $errors[] = $check['error'];
+                break;
+            }
+            if (!$check['available']) {
+                $conflict = $check['conflict'];
+                flash('error', 'Una de las piezas no está disponible para las nuevas fechas. Revise el conflicto indicado.');
+                break;
+            }
         }
     }
 
@@ -147,8 +155,7 @@ if (is_post()) {
             'cancelled'      => 'available',
         ];
         if (isset($commercialMap[$form['rental_status']])) {
-            db_update('products', ['commercial_status' => $commercialMap[$form['rental_status']]],
-                'id = :id', ['id' => $rental['product_id']]);
+            sync_rental_products_status($id, $commercialMap[$form['rental_status']]);
         }
 
         // Sincronizar la factura asociada (totales y saldo)
@@ -159,7 +166,7 @@ if (is_post()) {
             elseif ($balance > 0.009)  $invStatus = 'partial';
             else                       $invStatus = 'paid';
             db_update('invoices', [
-                'subtotal'    => $total,
+                'subtotal'    => $form['rental_price'],
                 'discount'    => $form['discount'],
                 'total'       => $total,
                 'paid_amount' => $paid,
@@ -181,7 +188,7 @@ $currentPaid    = rental_paid_amount($id);
 $currentBalance = round((float) $rental['total_amount'] - $currentPaid, 2);
 
 $page_title    = 'Editar alquiler ' . $rental['rental_number'];
-$page_subtitle = $rental['customer_name'] . ' · ' . $rental['product_name'];
+$page_subtitle = $rental['customer_name'] . ' · ' . count($rentalItems) . (count($rentalItems) === 1 ? ' producto' : ' productos');
 $active        = 'alquileres';
 $header_actions = '<a href="' . admin_url('alquileres/ver.php?id=' . $id) . '" class="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50">'
     . icon('chevron-left', 'w-4 h-4') . ' Volver al detalle</a>';
@@ -227,9 +234,9 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
             </div>
             <div class="mt-4 grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
                 <div><p class="text-xs uppercase tracking-wide text-gray-400">Cliente</p><p class="font-medium text-gray-900"><?= e($rental['customer_name']) ?></p></div>
-                <div><p class="text-xs uppercase tracking-wide text-gray-400">Producto</p><p class="font-medium text-gray-900"><?= e($rental['product_name']) ?></p></div>
+                <div><p class="text-xs uppercase tracking-wide text-gray-400">Productos</p><p class="font-medium text-gray-900"><?= e($rentalProductNames) ?></p></div>
             </div>
-            <p class="mt-3 text-xs text-gray-400">El cliente y el producto no se modifican en la edición. Para cambiarlos, cancele este alquiler y cree uno nuevo.</p>
+            <p class="mt-3 text-xs text-gray-400">El cliente y los productos no se modifican en la edición. Para cambiarlos, cancele este alquiler y cree uno nuevo.</p>
         </div>
 
         <!-- Fechas -->

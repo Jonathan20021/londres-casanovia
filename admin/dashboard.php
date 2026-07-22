@@ -91,7 +91,8 @@ foreach ($chartIngresos as $c) { $maxIngreso = max($maxIngreso, $c['value']); }
 $alquileresPorCategoria = db_all(
     "SELECT COALESCE(c.name, 'Sin categoría') AS category_name, COUNT(r.id) AS total
      FROM rentals r
-     JOIN products p ON p.id = r.product_id
+     JOIN rental_items ri ON ri.rental_id = r.id
+     JOIN products p ON p.id = ri.product_id
      LEFT JOIN categories c ON c.id = p.category_id
      GROUP BY c.id, category_name
      ORDER BY total DESC, category_name ASC
@@ -106,7 +107,8 @@ foreach ($alquileresPorCategoria as $c) { $maxCategoria = max($maxCategoria, (in
 $proximosAlquileres = db_all(
     "SELECT r.id, r.rental_number, r.event_date, r.delivery_date, r.return_date,
             r.rental_status, r.initial_payment_paid, r.remaining_balance,
-            c.full_name AS customer_name, p.name AS product_name
+            c.full_name AS customer_name, p.name AS product_name,
+            (SELECT COUNT(*) FROM rental_items ric WHERE ric.rental_id = r.id) AS product_count
      FROM rentals r
      JOIN customers c ON c.id = r.customer_id
      JOIN products  p ON p.id = r.product_id
@@ -134,7 +136,8 @@ $masAlquilados = db_all(
     "SELECT p.id, p.name, p.main_image, COALESCE(c.name, 'General') AS category_name,
             COUNT(r.id) AS total
      FROM rentals r
-     JOIN products p ON p.id = r.product_id
+     JOIN rental_items ri ON ri.rental_id = r.id
+     JOIN products p ON p.id = ri.product_id
      LEFT JOIN categories c ON c.id = p.category_id
      GROUP BY p.id, p.name, p.main_image, category_name
      ORDER BY total DESC, p.name ASC
@@ -285,7 +288,7 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
                                             </div>
                                         </div>
                                     </td>
-                                    <td class="px-5 py-4 text-gray-700"><?= e($r['product_name']) ?></td>
+                                    <td class="px-5 py-4 text-gray-700"><?= e($r['product_name']) ?><?= (int) $r['product_count'] > 1 ? ' +' . ((int) $r['product_count'] - 1) : '' ?></td>
                                     <td class="px-5 py-4 text-gray-700"><?= e(format_date($r['event_date'])) ?></td>
                                     <td class="px-5 py-4 text-gray-700"><?= e(format_date($r['delivery_date'])) ?></td>
                                     <td class="px-5 py-4 text-gray-700"><?= e(format_date($r['return_date'])) ?></td>

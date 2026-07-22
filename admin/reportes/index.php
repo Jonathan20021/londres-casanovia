@@ -121,12 +121,12 @@ $stLabels = array_map(fn($r) => $stEs[$r['rental_status']] ?? $r['rental_status'
 $stData   = array_map(fn($r) => (int) $r['c'], $stRows);
 
 /* Ingresos por categoría (alquileres del periodo) */
-$catRows = db_all("SELECT COALESCE(c.name,'Sin categoría') n, SUM(r.total_amount) t FROM rentals r JOIN products p ON p.id=r.product_id LEFT JOIN categories c ON c.id=p.category_id WHERE r.created_at BETWEEN :a AND :b AND r.rental_status <> 'cancelled' GROUP BY c.id, n ORDER BY t DESC LIMIT 6", ['a' => $from_dt, 'b' => $to_dt]);
+$catRows = db_all("SELECT COALESCE(c.name,'Sin categoría') n, SUM(ri.unit_price) t FROM rentals r JOIN rental_items ri ON ri.rental_id=r.id JOIN products p ON p.id=ri.product_id LEFT JOIN categories c ON c.id=p.category_id WHERE r.created_at BETWEEN :a AND :b AND r.rental_status <> 'cancelled' GROUP BY c.id, n ORDER BY t DESC LIMIT 6", ['a' => $from_dt, 'b' => $to_dt]);
 $catLabels = array_map(fn($r) => $r['n'], $catRows);
 $catData   = array_map(fn($r) => round((float) $r['t'], 2), $catRows);
 
 /* Top productos por # alquileres */
-$topRows = db_all("SELECT p.name n, COUNT(r.id) c FROM rentals r JOIN products p ON p.id=r.product_id WHERE r.created_at BETWEEN :a AND :b AND r.rental_status <> 'cancelled' GROUP BY p.id, p.name ORDER BY c DESC LIMIT 7", ['a' => $from_dt, 'b' => $to_dt]);
+$topRows = db_all("SELECT p.name n, COUNT(ri.id) c FROM rentals r JOIN rental_items ri ON ri.rental_id=r.id JOIN products p ON p.id=ri.product_id WHERE r.created_at BETWEEN :a AND :b AND r.rental_status <> 'cancelled' GROUP BY p.id, p.name ORDER BY c DESC LIMIT 7", ['a' => $from_dt, 'b' => $to_dt]);
 $topLabels = array_map(fn($r) => $r['n'], $topRows);
 $topData   = array_map(fn($r) => (int) $r['c'], $topRows);
 
@@ -151,14 +151,14 @@ $topClients = db_all("SELECT cu.id, cu.full_name, COUNT(r.id) n, COALESCE(SUM(r.
 
 $profitability = db_all(
     "SELECT p.name, p.cost_price,
-            COALESCE((SELECT SUM(r.total_amount) FROM rentals r WHERE r.product_id=p.id AND r.rental_status<>'cancelled' AND r.created_at BETWEEN :a AND :b),0)
+            COALESCE((SELECT SUM(ri.unit_price) FROM rental_items ri JOIN rentals r ON r.id=ri.rental_id WHERE ri.product_id=p.id AND r.rental_status<>'cancelled' AND r.created_at BETWEEN :a AND :b),0)
           + COALESCE((SELECT SUM(s.total_amount) FROM sales s WHERE s.product_id=p.id AND s.status<>'cancelled' AND s.created_at BETWEEN :a2 AND :b2),0) AS ingresos
      FROM products p WHERE p.status='active'
      HAVING ingresos > 0 ORDER BY ingresos DESC LIMIT 6",
     ['a' => $from_dt, 'b' => $to_dt, 'a2' => $from_dt, 'b2' => $to_dt]
 );
 
-$overdue = db_all("SELECT r.id, r.rental_number, r.return_date, r.remaining_balance, cu.full_name AS customer_name, p.name AS product_name FROM rentals r JOIN customers cu ON cu.id=r.customer_id JOIN products p ON p.id=r.product_id WHERE r.return_date < CURDATE() AND r.rental_status IN ('delivered','pending_return') ORDER BY r.return_date ASC LIMIT 6");
+$overdue = db_all("SELECT r.id, r.rental_number, r.return_date, r.remaining_balance, cu.full_name AS customer_name, (SELECT GROUP_CONCAT(p2.name ORDER BY ri.sort_order SEPARATOR ', ') FROM rental_items ri JOIN products p2 ON p2.id=ri.product_id WHERE ri.rental_id=r.id) AS product_name FROM rentals r JOIN customers cu ON cu.id=r.customer_id WHERE r.return_date < CURDATE() AND r.rental_status IN ('delivered','pending_return') ORDER BY r.return_date ASC LIMIT 6");
 
 /* Operativo: próximas entregas / devoluciones (7 días) */
 $nextDeliveries = (int) db_value("SELECT COUNT(*) FROM rentals WHERE delivery_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY) AND rental_status IN ('reserved','confirmed')");

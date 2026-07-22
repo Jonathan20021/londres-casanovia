@@ -118,10 +118,12 @@ switch ($report) {
             "SELECT r.rental_number, r.created_at, r.delivery_date, r.return_date,
                     r.total_amount, r.initial_payment_paid, r.remaining_balance,
                     r.payment_status, r.rental_status,
-                    cu.full_name AS customer_name, p.name AS product_name
+                    cu.full_name AS customer_name,
+                    (SELECT GROUP_CONCAT(p2.name ORDER BY ri.sort_order SEPARATOR ', ')
+                     FROM rental_items ri JOIN products p2 ON p2.id = ri.product_id
+                     WHERE ri.rental_id = r.id) AS product_name
              FROM rentals r
              JOIN customers cu ON cu.id = r.customer_id
-             JOIN products p ON p.id = r.product_id
              WHERE r.created_at BETWEEN :from AND :to
              ORDER BY r.created_at DESC",
             ['from' => $from_dt, 'to' => $to_dt]
@@ -142,9 +144,10 @@ switch ($report) {
         $data['headers'] = ['#', 'Producto', 'SKU', 'Categoría', 'Veces alquilado', 'Ingresos'];
         $rows = db_all(
             "SELECT p.name, p.sku, c.name AS category_name,
-                    COUNT(r.id) AS veces, COALESCE(SUM(r.total_amount),0) AS ingresos
+                    COUNT(ri.id) AS veces, COALESCE(SUM(ri.unit_price),0) AS ingresos
              FROM rentals r
-             JOIN products p ON p.id = r.product_id
+             JOIN rental_items ri ON ri.rental_id = r.id
+             JOIN products p ON p.id = ri.product_id
              LEFT JOIN categories c ON c.id = p.category_id
              WHERE r.created_at BETWEEN :from AND :to AND r.rental_status <> 'cancelled'
              GROUP BY p.id, p.name, p.sku, c.name
@@ -185,10 +188,12 @@ switch ($report) {
         $rows = db_all(
             "SELECT r.rental_number, r.total_amount, r.initial_payment_paid, r.remaining_balance,
                     r.payment_status, r.rental_status, r.return_date,
-                    cu.full_name AS customer_name, p.name AS product_name
+                    cu.full_name AS customer_name,
+                    (SELECT GROUP_CONCAT(p2.name ORDER BY ri.sort_order SEPARATOR ', ')
+                     FROM rental_items ri JOIN products p2 ON p2.id = ri.product_id
+                     WHERE ri.rental_id = r.id) AS product_name
              FROM rentals r
              JOIN customers cu ON cu.id = r.customer_id
-             JOIN products p ON p.id = r.product_id
              WHERE r.remaining_balance > 0 AND r.rental_status <> 'cancelled'
              ORDER BY r.remaining_balance DESC",
             []
@@ -258,13 +263,13 @@ switch ($report) {
         $rows = db_all(
             "SELECT p.name, p.sku, p.cost_price,
                     COALESCE((
-                        SELECT SUM(r.total_amount) FROM rentals r
-                        WHERE r.product_id = p.id AND r.rental_status <> 'cancelled'
+                        SELECT SUM(ri.unit_price) FROM rental_items ri JOIN rentals r ON r.id = ri.rental_id
+                        WHERE ri.product_id = p.id AND r.rental_status <> 'cancelled'
                           AND r.created_at BETWEEN :rf AND :rt
                     ),0) AS ingresos_alquiler,
                     COALESCE((
-                        SELECT COUNT(*) FROM rentals r
-                        WHERE r.product_id = p.id AND r.rental_status <> 'cancelled'
+                        SELECT COUNT(*) FROM rental_items ri JOIN rentals r ON r.id = ri.rental_id
+                        WHERE ri.product_id = p.id AND r.rental_status <> 'cancelled'
                           AND r.created_at BETWEEN :rf2 AND :rt2
                     ),0) AS num_alquileres,
                     COALESCE((
@@ -298,10 +303,12 @@ switch ($report) {
         $data['headers'] = ['Alquiler', 'Fecha creación', 'Cliente', 'Producto', 'Total', 'Entrega', 'Devolución'];
         $rows = db_all(
             "SELECT r.rental_number, r.created_at, r.total_amount, r.delivery_date, r.return_date,
-                    cu.full_name AS customer_name, p.name AS product_name
+                    cu.full_name AS customer_name,
+                    (SELECT GROUP_CONCAT(p2.name ORDER BY ri.sort_order SEPARATOR ', ')
+                     FROM rental_items ri JOIN products p2 ON p2.id = ri.product_id
+                     WHERE ri.rental_id = r.id) AS product_name
              FROM rentals r
              JOIN customers cu ON cu.id = r.customer_id
-             JOIN products p ON p.id = r.product_id
              WHERE r.rental_status = 'cancelled' AND r.created_at BETWEEN :from AND :to
              ORDER BY r.created_at DESC",
             ['from' => $from_dt, 'to' => $to_dt]
@@ -321,10 +328,12 @@ switch ($report) {
                             'Días de retraso', 'Saldo', 'Estado'];
         $rows = db_all(
             "SELECT r.rental_number, r.return_date, r.rental_status, r.remaining_balance,
-                    cu.full_name AS customer_name, cu.phone, p.name AS product_name
+                    cu.full_name AS customer_name, cu.phone,
+                    (SELECT GROUP_CONCAT(p2.name ORDER BY ri.sort_order SEPARATOR ', ')
+                     FROM rental_items ri JOIN products p2 ON p2.id = ri.product_id
+                     WHERE ri.rental_id = r.id) AS product_name
              FROM rentals r
              JOIN customers cu ON cu.id = r.customer_id
-             JOIN products p ON p.id = r.product_id
              WHERE r.return_date < CURDATE()
                AND r.rental_status IN ('delivered','pending_return')
              ORDER BY r.return_date ASC",

@@ -5,7 +5,7 @@
  */
 $primary = $business['primary_color'] ?? '#C8102E';
 $logo = pdf_logo_uri();
-$conditionLabel = ['new'=>'Nuevo','excellent'=>'Excelente','good'=>'Bueno','repair'=>'En reparación','out_of_service'=>'Fuera de servicio'][$product['condition_status'] ?? ''] ?? '—';
+$conditionLabels = ['new'=>'Nuevo','excellent'=>'Excelente','good'=>'Bueno','repair'=>'En reparación','out_of_service'=>'Fuera de servicio'];
 ?>
 <!doctype html>
 <html lang="es"><head><meta charset="utf-8"><title>Contrato <?= e($rental['rental_number']) ?></title>
@@ -74,12 +74,21 @@ $conditionLabel = ['new'=>'Nuevo','excellent'=>'Excelente','good'=>'Bueno','repa
       </td>
     </tr></table>
 
-    <h2><span class="n">01.</span> Pieza alquilada</h2>
+    <h2><span class="n">01.</span> <?= count($products ?? []) === 1 ? 'Pieza alquilada' : 'Piezas alquiladas' ?></h2>
     <table class="kv">
-      <tr><td class="k">Producto</td><td><strong><?= e($product['name'] ?? '') ?></strong> <?= !empty($product['sku']) ? '(' . e($product['sku']) . ')' : '' ?></td></tr>
-      <tr><td class="k">Categoría</td><td><?= e($product['category_name'] ?? '—') ?></td></tr>
-      <tr><td class="k">Talla / Color</td><td><?= e($product['size'] ?? '—') ?> · <?= e($product['color'] ?? '—') ?></td></tr>
-      <tr><td class="k">Estado al entregar</td><td><?= e($conditionLabel) ?><?= !empty($rental['delivery_condition']) ? ' — ' . e($rental['delivery_condition']) : '' ?></td></tr>
+      <?php foreach (($products ?? [$product]) as $position => $contractProduct): ?>
+        <?php $conditionLabel = $conditionLabels[$contractProduct['condition_status'] ?? ''] ?? '—'; ?>
+        <tr>
+          <td class="k">Pieza <?= (int) $position + 1 ?></td>
+          <td><strong><?= e($contractProduct['name'] ?? '') ?></strong>
+            <?= !empty($contractProduct['barcode']) ? '(' . e($contractProduct['barcode']) . ')' : (!empty($contractProduct['sku']) ? '(' . e($contractProduct['sku']) . ')' : '') ?>
+            — <?= e($contractProduct['category_name'] ?? 'General') ?>
+            — Talla/Color: <?= e($contractProduct['size'] ?? '—') ?> · <?= e($contractProduct['color'] ?? '—') ?>
+            — <?= e($conditionLabel) ?>
+          </td>
+        </tr>
+      <?php endforeach; ?>
+      <?php if (!empty($rental['delivery_condition'])): ?><tr><td class="k">Estado al entregar</td><td><?= e($rental['delivery_condition']) ?></td></tr><?php endif; ?>
     </table>
 
     <h2><span class="n">02.</span> Fechas</h2>

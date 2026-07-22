@@ -16,7 +16,7 @@ Construida con **PHP puro (sin frameworks), MySQL/MariaDB, Tailwind CSS y JavaSc
 - **Dashboard** con métricas reales, gráficos en CSS y tabla de próximos alquileres.
 - **Inventario/Productos** con imagen principal + galería, SKU, tipo (alquiler/venta/ambos), estados físico y comercial, piezas únicas, destacados.
 - **Disponibilidad por fecha** con detección real de conflictos de solapamiento y bloqueo automático de reservas duplicadas.
-- **Alquileres** con flujo **50% inicial / 50% al retirar**, estados completos, contrato, evidencias de entrega/devolución.
+- **Alquileres multiproducto** con lector de códigos, fotos, flujo **50% inicial / 50% al retirar**, estados completos, contrato y evidencias de entrega/devolución.
 - **Facturación, pagos y ventas** con numeración automática, recibos y comprobantes imprimibles.
 - **Clientes** con historial completo (alquileres, ventas, pagos, facturas, deudas).
 - **Calendario** mensual de ocupación con código de colores.
@@ -184,6 +184,8 @@ formulario de alta y queda visible en la ficha y en la edición del producto.
 - **Módulo:** `Admin → Inventario → Códigos de barra`. Incluye escáner en vivo (el cursor queda
   enfocado; el lector escribe el código y confirma con Enter → aparece la ficha del producto),
   filtros, selección múltiple y exportación.
+- **Nuevo alquiler:** el mismo lector permite escanear varias piezas consecutivas. Cada lectura
+  agrega la foto, el código, las características y el precio a una sola reserva y factura.
 - **Exportación PDF (Dompdf)** con la marca del sistema, individual o por lote:
   | Formato | Etiquetas por hoja A4 | X‑dimension | Uso |
   |---|---|---|---|
@@ -196,6 +198,9 @@ formulario de alta y queda visible en la ficha y en la edición del producto.
 - **Migración:** en una instalación existente ejecute una sola vez
   `database/migrations/2026_07_22_barcodes.sql`. Los productos ya creados reciben su código
   automáticamente al entrar al módulo. En instalaciones nuevas ya viene en `schema.sql`.
+- **Alquileres existentes:** ejecute también
+  `database/migrations/2026_07_22_rental_items.sql` para habilitar varias piezas por alquiler y
+  trasladar automáticamente los registros anteriores a su primera línea de detalle.
 
 ---
 

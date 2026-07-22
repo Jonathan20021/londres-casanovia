@@ -129,37 +129,34 @@ $docTitle  = 'Contrato ' . ($rental['rental_number'] ?? '') . ' · ' . $bizName;
                 </div>
             </div>
 
-            <!-- Producto alquilado -->
+            <!-- Productos alquilados -->
             <div class="mt-7 break-avoid">
-                <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Pieza en alquiler</p>
+                <p class="text-xs font-semibold uppercase tracking-wide text-gray-400"><?= count($products ?? []) === 1 ? 'Pieza en alquiler' : 'Piezas en alquiler' ?></p>
                 <div class="mt-2 overflow-hidden rounded-xl border border-gray-200">
                     <table class="min-w-full divide-y divide-gray-100 text-sm">
-                        <tbody class="divide-y divide-gray-50">
+                        <thead class="bg-gray-50">
                             <tr>
-                                <td class="w-1/3 bg-gray-50 px-5 py-3 font-medium text-gray-600">Producto</td>
-                                <td class="px-5 py-3 text-gray-900"><?= e($product['name'] ?? '—') ?></td>
+                                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Producto</th>
+                                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Características</th>
+                                <th class="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">Importe</th>
                             </tr>
-                            <?php if (!empty($product['category_name'])): ?>
-                                <tr><td class="bg-gray-50 px-5 py-3 font-medium text-gray-600">Categoría</td><td class="px-5 py-3 text-gray-900"><?= e($product['category_name']) ?></td></tr>
-                            <?php endif; ?>
-                            <?php if (!empty($product['sku'])): ?>
-                                <tr><td class="bg-gray-50 px-5 py-3 font-medium text-gray-600">Código (SKU)</td><td class="px-5 py-3 text-gray-900"><?= e($product['sku']) ?></td></tr>
-                            <?php endif; ?>
-                            <?php
-                            $specs = array_filter([
-                                'Talla'    => $product['size']     ?? '',
-                                'Color'    => $product['color']    ?? '',
-                                'Material' => $product['material'] ?? '',
-                            ], fn($v) => $v !== '' && $v !== null);
-                            ?>
-                            <?php if ($specs): ?>
+                        </thead>
+                        <tbody class="divide-y divide-gray-50">
+                            <?php foreach (($products ?? [$product]) as $contractProduct): ?>
                                 <tr>
-                                    <td class="bg-gray-50 px-5 py-3 font-medium text-gray-600">Características</td>
                                     <td class="px-5 py-3 text-gray-900">
-                                        <?php $i = 0; foreach ($specs as $k => $v): echo ($i++ ? ' · ' : '') . e($k) . ': ' . e($v); endforeach; ?>
+                                        <p class="font-medium"><?= e($contractProduct['name'] ?? '—') ?></p>
+                                        <p class="text-xs text-gray-400"><?= e($contractProduct['barcode'] ?? $contractProduct['sku'] ?? '') ?></p>
                                     </td>
+                                    <td class="px-5 py-3 text-gray-600"><?= e(implode(' · ', array_filter([
+                                        $contractProduct['category_name'] ?? '',
+                                        !empty($contractProduct['size']) ? 'Talla ' . $contractProduct['size'] : '',
+                                        $contractProduct['color'] ?? '',
+                                        $contractProduct['material'] ?? '',
+                                    ]))) ?></td>
+                                    <td class="px-5 py-3 text-right font-medium text-gray-900"><?= e(money($contractProduct['unit_price'] ?? 0)) ?></td>
                                 </tr>
-                            <?php endif; ?>
+                            <?php endforeach; ?>
                         </tbody>
                     </table>
                 </div>
@@ -207,7 +204,7 @@ $docTitle  = 'Contrato ' . ($rental['rental_number'] ?? '') . ' · ' . $bizName;
                     if ($deliveryCond !== '') {
                         echo e($deliveryCond);
                     } elseif (!empty($product['condition_status'])) {
-                        echo 'Condición física registrada: ' . status_badge($product['condition_status'], 'condition');
+                        echo 'Condición física registrada de las piezas: ' . status_badge($product['condition_status'], 'condition');
                     } else {
                         echo 'La pieza se entrega en óptimas condiciones, lista para su uso.';
                     }

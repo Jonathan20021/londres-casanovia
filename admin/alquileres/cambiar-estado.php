@@ -51,7 +51,7 @@ $productStatus = match ($status) {
 
 db_update('rentals', ['rental_status' => $status], 'id = :id', ['id' => $rentalId]);
 if ($productStatus !== null) {
-    db_update('products', ['commercial_status' => $productStatus], 'id = :id', ['id' => (int) $rental['product_id']]);
+    sync_rental_products_status($rentalId, $productStatus);
 }
 
 log_activity('rental.status', 'rental', $rentalId, 'Estado cambiado a ' . $status . ' (' . $rental['rental_number'] . ')');

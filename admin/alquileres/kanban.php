@@ -26,7 +26,8 @@ $colDot = [
 $rentals = db_all(
     "SELECT r.id, r.rental_number, r.event_date, r.delivery_date, r.return_date,
             r.rental_status, r.total_amount, r.remaining_balance,
-            c.full_name AS customer_name, p.name AS product_name, p.main_image
+            c.full_name AS customer_name, p.name AS product_name, p.main_image,
+            (SELECT COUNT(*) FROM rental_items ric WHERE ric.rental_id = r.id) AS product_count
      FROM rentals r
      JOIN customers c ON c.id = r.customer_id
      JOIN products  p ON p.id = r.product_id
@@ -67,7 +68,7 @@ function kanban_card(array $r): string
             <img src="<?= e(upload_url($r['main_image'])) ?>" alt="" class="h-10 w-10 shrink-0 rounded-lg object-cover ring-1 ring-gray-100">
             <div class="min-w-0">
                 <p class="truncate text-sm font-semibold text-gray-900"><?= e($r['customer_name']) ?></p>
-                <p class="truncate text-xs text-gray-500"><?= e($r['product_name']) ?></p>
+                <p class="truncate text-xs text-gray-500"><?= e($r['product_name']) ?><?= (int) $r['product_count'] > 1 ? ' +' . ((int) $r['product_count'] - 1) : '' ?></p>
             </div>
         </div>
         <div class="mt-3 flex items-center justify-between border-t border-gray-50 pt-2.5 text-[11px] text-gray-400">

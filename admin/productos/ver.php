@@ -41,15 +41,16 @@ $rentals = db_all(
     'SELECT r.id, r.rental_number, r.event_date, r.delivery_date, r.return_date,
             r.total_amount, r.rental_status, r.payment_status, c.full_name AS customer_name
      FROM rentals r
+     JOIN rental_items ri ON ri.rental_id = r.id
      JOIN customers c ON c.id = r.customer_id
-     WHERE r.product_id = :id
+     WHERE ri.product_id = :id
      ORDER BY r.delivery_date DESC
      LIMIT 25',
     ['id' => $id]
 );
 
 /* Conteos para resumen */
-$rentalCount = (int) db_value('SELECT COUNT(*) FROM rentals WHERE product_id = :id', ['id' => $id]);
+$rentalCount = (int) db_value('SELECT COUNT(*) FROM rental_items WHERE product_id = :id', ['id' => $id]);
 $saleCount   = (int) db_value('SELECT COUNT(*) FROM sales WHERE product_id = :id', ['id' => $id]);
 
 $typeLabels = ['rental' => 'Alquiler', 'sale' => 'Venta', 'both' => 'Alquiler y venta'];

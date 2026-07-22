@@ -29,7 +29,11 @@ $where  = [];
 $params = [];
 
 if ($q !== '') {
-    $where[] = '(r.rental_number LIKE :q OR c.full_name LIKE :q OR p.name LIKE :q)';
+    $where[] = '(r.rental_number LIKE :q OR c.full_name LIKE :q OR EXISTS (
+        SELECT 1 FROM rental_items riq
+        JOIN products pq ON pq.id = riq.product_id
+        WHERE riq.rental_id = r.id AND (pq.name LIKE :q OR pq.sku LIKE :q OR pq.barcode LIKE :q)
+    ))';
     $params['q'] = '%' . $q . '%';
 }
 if ($rentalStatus !== '' && in_array($rentalStatus, $rentalStatuses, true)) {
@@ -57,7 +61,6 @@ $total = (int) db_value(
     "SELECT COUNT(*)
        FROM rentals r
        JOIN customers c ON c.id = r.customer_id
-       JOIN products  p ON p.id = r.product_id
      $whereSql",
     $params
 );
@@ -66,7 +69,8 @@ $pg = paginate($total, 15);
 
 $rows = db_all(
     "SELECT r.*, c.full_name AS customer_name, c.whatsapp AS customer_whatsapp,
-            p.name AS product_name, p.main_image AS product_image
+            p.name AS product_name, p.main_image AS product_image,
+            (SELECT COUNT(*) FROM rental_items ric WHERE ric.rental_id = r.id) AS product_count
        FROM rentals r
        JOIN customers c ON c.id = r.customer_id
        JOIN products  p ON p.id = r.product_id
@@ -222,7 +226,7 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
                                 <td class="px-5 py-4 text-gray-700">
                                     <div class="flex items-center gap-2.5">
                                         <img src="<?= e(upload_url($r['product_image'])) ?>" alt="" class="h-9 w-9 flex-none rounded-lg object-cover ring-1 ring-gray-100">
-                                        <span class="line-clamp-1"><?= e($r['product_name']) ?></span>
+                                        <span class="line-clamp-1"><?= e($r['product_name']) ?><?= (int) $r['product_count'] > 1 ? ' +' . ((int) $r['product_count'] - 1) : '' ?></span>
                                     </div>
                                 </td>
                                 <td class="px-5 py-4 text-gray-700"><?= format_date($r['event_date']) ?></td>

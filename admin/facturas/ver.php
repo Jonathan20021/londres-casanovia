@@ -32,6 +32,10 @@ if (!$invoice) {
     redirect(admin_url('facturas/index.php'));
 }
 
+$invoiceItems = !empty($invoice['rental_id'])
+    ? rental_items_details((int) $invoice['rental_id'])
+    : [];
+
 /* Pagos asociados a esta factura (por invoice_id o por la operación origen) */
 $paymentWhere  = ['invoice_id = :iid'];
 $paymentParams = ['iid' => $id];
@@ -158,16 +162,33 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-50">
-                            <tr>
-                                <td class="px-5 py-4 text-gray-700">
-                                    <p class="font-medium text-gray-900"><?= e($invoice['concept'] ?: ($invoice['rental_product'] ?: ($invoice['sale_product'] ?: 'Servicio'))) ?></p>
-                                    <?php $prod = $invoice['rental_product'] ?: $invoice['sale_product']; ?>
-                                    <?php if ($prod && $invoice['concept']): ?>
-                                        <p class="mt-0.5 text-xs text-gray-400"><?= e($prod) ?></p>
-                                    <?php endif; ?>
-                                </td>
-                                <td class="px-5 py-4 text-right font-medium text-gray-900"><?= e(money($invoice['subtotal'])) ?></td>
-                            </tr>
+                            <?php if ($invoiceItems): ?>
+                                <?php foreach ($invoiceItems as $item): ?>
+                                    <tr>
+                                        <td class="px-5 py-4 text-gray-700">
+                                            <div class="flex items-center gap-3">
+                                                <img src="<?= e(upload_url($item['main_image'] ?? null)) ?>" alt="<?= e($item['name']) ?>" class="h-14 w-12 flex-none rounded-lg object-cover ring-1 ring-gray-100">
+                                                <div>
+                                                    <p class="font-medium text-gray-900"><?= e($item['name']) ?></p>
+                                                    <p class="mt-0.5 text-xs text-gray-400"><?= e(implode(' · ', array_filter([$item['barcode'] ?? $item['sku'] ?? '', !empty($item['size']) ? 'Talla ' . $item['size'] : '', $item['color'] ?? '']))) ?></p>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td class="px-5 py-4 text-right font-medium text-gray-900"><?= e(money($item['unit_price'])) ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <tr>
+                                    <td class="px-5 py-4 text-gray-700">
+                                        <p class="font-medium text-gray-900"><?= e($invoice['concept'] ?: ($invoice['rental_product'] ?: ($invoice['sale_product'] ?: 'Servicio'))) ?></p>
+                                        <?php $prod = $invoice['rental_product'] ?: $invoice['sale_product']; ?>
+                                        <?php if ($prod && $invoice['concept']): ?>
+                                            <p class="mt-0.5 text-xs text-gray-400"><?= e($prod) ?></p>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td class="px-5 py-4 text-right font-medium text-gray-900"><?= e(money($invoice['subtotal'])) ?></td>
+                                </tr>
+                            <?php endif; ?>
                         </tbody>
                     </table>
                 </div>

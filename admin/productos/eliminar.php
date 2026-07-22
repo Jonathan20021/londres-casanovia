@@ -29,7 +29,7 @@ if (!$product) {
 }
 
 /* ¿Tiene movimientos asociados? */
-$hasRentals = (int) db_value('SELECT COUNT(*) FROM rentals WHERE product_id = :id', ['id' => $id]) > 0;
+$hasRentals = (int) db_value('SELECT COUNT(*) FROM rental_items WHERE product_id = :id', ['id' => $id]) > 0;
 $hasSales   = (int) db_value('SELECT COUNT(*) FROM sales WHERE product_id = :id', ['id' => $id]) > 0;
 
 if ($hasRentals || $hasSales) {

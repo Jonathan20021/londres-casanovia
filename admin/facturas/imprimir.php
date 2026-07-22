@@ -62,13 +62,32 @@ $payments = db_all(
 );
 
 /* Líneas de concepto */
-$conceptText = $invoice['concept']
-    ?: ($invoice['rental_product'] ?: ($invoice['sale_product'] ?: 'Servicio'));
-$lines = [[
-    'concept' => (string) $conceptText,
-    'detail'  => (string) ($invoice['rental_number'] ?: ($invoice['sale_number'] ?: '')),
-    'amount'  => (float) $invoice['subtotal'],
-]];
+$rentalItems = !empty($invoice['rental_id'])
+    ? rental_items_details((int) $invoice['rental_id'])
+    : [];
+
+if ($rentalItems) {
+    $lines = array_map(static function (array $item): array {
+        $details = array_filter([
+            $item['barcode'] ?? $item['sku'] ?? '',
+            !empty($item['size']) ? 'Talla ' . $item['size'] : '',
+            $item['color'] ?? '',
+        ]);
+        return [
+            'concept' => (string) $item['name'],
+            'detail'  => implode(' · ', $details),
+            'amount'  => (float) $item['unit_price'],
+        ];
+    }, $rentalItems);
+} else {
+    $conceptText = $invoice['concept']
+        ?: ($invoice['rental_product'] ?: ($invoice['sale_product'] ?: 'Servicio'));
+    $lines = [[
+        'concept' => (string) $conceptText,
+        'detail'  => (string) ($invoice['rental_number'] ?: ($invoice['sale_number'] ?: '')),
+        'amount'  => (float) $invoice['subtotal'],
+    ]];
+}
 
 /* Datos del negocio para el partial */
 $business = settings_all();

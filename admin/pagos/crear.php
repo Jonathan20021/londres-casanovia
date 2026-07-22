@@ -45,7 +45,8 @@ if ($invoiceId > 0) {
 
 if ($rentalId > 0) {
     $rental = db_one(
-        'SELECT r.*, c.full_name AS customer_name, c.id AS cust_id, p.name AS product_name
+        'SELECT r.*, c.full_name AS customer_name, c.id AS cust_id, p.name AS product_name,
+                (SELECT COUNT(*) FROM rental_items ric WHERE ric.rental_id = r.id) AS product_count
          FROM rentals r
          JOIN customers c ON c.id = r.customer_id
          JOIN products  p ON p.id = r.product_id
@@ -367,7 +368,7 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
                     <span class="text-xs font-semibold uppercase tracking-wide">Alquiler</span>
                 </div>
                 <h3 class="mt-2 font-serif text-lg font-bold text-gray-900"><?= e($rental['rental_number']) ?></h3>
-                <p class="text-sm text-gray-500"><?= e($rental['product_name']) ?></p>
+                <p class="text-sm text-gray-500"><?= e($rental['product_name']) ?><?= (int) $rental['product_count'] > 1 ? ' +' . ((int) $rental['product_count'] - 1) : '' ?></p>
 
                 <dl class="mt-4 space-y-2 text-sm">
                     <div class="flex justify-between"><dt class="text-gray-500">Entrega</dt><dd class="text-gray-700"><?= e(format_date($rental['delivery_date'])) ?></dd></div>

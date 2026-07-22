@@ -35,10 +35,11 @@ function checkProductAvailability(
 
     $sql = "SELECT r.id, r.rental_number, r.event_date, r.delivery_date, r.return_date,
                    r.rental_status, c.full_name AS customer_name, p.name AS product_name
-            FROM rentals r
+            FROM rental_items ri
+            JOIN rentals r ON r.id = ri.rental_id
             JOIN customers c ON c.id = r.customer_id
-            JOIN products  p ON p.id = r.product_id
-            WHERE r.product_id = ?
+            JOIN products  p ON p.id = ri.product_id
+            WHERE ri.product_id = ?
               AND r.rental_status IN ($in)
               AND r.delivery_date <= ?   /* existing.delivery <= new.return  */
               AND r.return_date   >= ?   /* existing.return   >= new.delivery */";
@@ -67,11 +68,54 @@ function productBusyRanges(int $productId): array
     $statuses = RENTAL_BLOCKING_STATUSES;
     $in = implode(',', array_fill(0, count($statuses), '?'));
     return db_all(
-        "SELECT delivery_date, return_date, rental_status
-         FROM rentals
-         WHERE product_id = ? AND rental_status IN ($in)
-         ORDER BY delivery_date ASC",
+        "SELECT r.delivery_date, r.return_date, r.rental_status
+         FROM rental_items ri
+         JOIN rentals r ON r.id = ri.rental_id
+         WHERE ri.product_id = ? AND r.rental_status IN ($in)
+         ORDER BY r.delivery_date ASC",
         array_merge([$productId], $statuses)
+    );
+}
+
+/** IDs de todos los productos incluidos en un alquiler, en orden de captura. */
+function rental_product_ids(int $rentalId): array
+{
+    return array_map(
+        'intval',
+        array_column(
+            db_all(
+                'SELECT product_id FROM rental_items WHERE rental_id = :id ORDER BY sort_order ASC, id ASC',
+                ['id' => $rentalId]
+            ),
+            'product_id'
+        )
+    );
+}
+
+/** Productos y precio registrado de un alquiler. */
+function rental_items_details(int $rentalId): array
+{
+    return db_all(
+        "SELECT ri.id AS rental_item_id, ri.unit_price, ri.sort_order,
+                p.*, c.name AS category_name
+         FROM rental_items ri
+         JOIN products p ON p.id = ri.product_id
+         LEFT JOIN categories c ON c.id = p.category_id
+         WHERE ri.rental_id = :id
+         ORDER BY ri.sort_order ASC, ri.id ASC",
+        ['id' => $rentalId]
+    );
+}
+
+/** Sincroniza el estado comercial de todas las piezas de un alquiler. */
+function sync_rental_products_status(int $rentalId, string $commercialStatus): void
+{
+    db_exec(
+        'UPDATE products p
+         JOIN rental_items ri ON ri.product_id = p.id
+         SET p.commercial_status = :status
+         WHERE ri.rental_id = :rental_id',
+        ['status' => $commercialStatus, 'rental_id' => $rentalId]
     );
 }
 
