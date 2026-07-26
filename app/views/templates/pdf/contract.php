@@ -43,10 +43,11 @@ $conditionLabels = ['new'=>'Nuevo','excellent'=>'Excelente','good'=>'Bueno','rep
   <div class="band">
     <table style="width:100%"><tr>
       <td style="width:62%; vertical-align:middle">
-        <table><tr>
-          <?php if ($logo): ?><td style="width:50px; vertical-align:middle"><img src="<?= $logo ?>" style="width:42px"></td><?php endif; ?>
-          <td style="vertical-align:middle"><div class="brand">LONDRES</div><div class="sub">Casa de Novias</div></td>
-        </tr></table>
+        <?php if ($logo): ?>
+          <img src="<?= $logo ?>" style="width:168px" alt="LONDRES Casa de Novias">
+        <?php else: ?>
+          <div class="brand">LONDRES</div><div class="sub">Casa de Novias</div>
+        <?php endif; ?>
       </td>
       <td style="text-align:right; vertical-align:middle">
         <h1>CONTRATO DE ALQUILER</h1>

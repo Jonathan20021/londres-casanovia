@@ -16,15 +16,36 @@ function pdf_available(): bool
 }
 
 /** Data-URI del logo (cabina) para incrustarlo en los PDF/plantillas. */
-function pdf_logo_uri(): string
+function pdf_logo_uri(string $tone = 'light'): string
+{
+    // PNG con transparencia: Dompdf lo renderiza con total fiabilidad
+    // (su soporte de SVG con trazados complejos no es fiable).
+    // 'light' = tinta blanca, para la banda oscura de los documentos.
+    static $cache = [];
+    if (isset($cache[$tone])) return $cache[$tone];
+
+    $archivo = $tone === 'dark' ? 'logo-londres-oscuro.png' : 'logo-londres-blanco.png';
+    $path = LCN_ROOT . '/public/assets/img/' . $archivo;
+
+    if (!is_file($path)) {   // respaldo al logo anterior
+        $path = LCN_ROOT . '/public/assets/img/logo-mark.svg';
+        return $cache[$tone] = is_file($path)
+            ? 'data:image/svg+xml;base64,' . base64_encode((string) file_get_contents($path))
+            : '';
+    }
+
+    return $cache[$tone] = 'data:image/png;base64,' . base64_encode((string) file_get_contents($path));
+}
+
+/** Data-URI de la cabina sola (marca compacta para etiquetas pequeñas). */
+function pdf_mark_uri(): string
 {
     static $uri = null;
     if ($uri !== null) return $uri;
-    $path = LCN_ROOT . '/public/assets/img/logo-mark.svg';
-    $uri = is_file($path)
-        ? 'data:image/svg+xml;base64,' . base64_encode((string) file_get_contents($path))
+    $path = LCN_ROOT . '/public/assets/img/logo-cabina.png';
+    return $uri = is_file($path)
+        ? 'data:image/png;base64,' . base64_encode((string) file_get_contents($path))
         : '';
-    return $uri;
 }
 
 /**

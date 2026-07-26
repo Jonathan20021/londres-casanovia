@@ -9,7 +9,9 @@
 ?>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="icon" type="image/svg+xml" href="<?= asset('img/logo-mark.svg') ?>">
+<!-- Icono: la cabina del logo oficial (legible a tamaño diminuto) -->
+<link rel="icon" type="image/svg+xml" href="<?= asset('img/logo-cabina.svg') ?>">
+<link rel="apple-touch-icon" href="<?= asset('img/logo-cabina.png') ?>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;0,9..144,900;1,9..144,400;1,9..144,500;1,9..144,600&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">

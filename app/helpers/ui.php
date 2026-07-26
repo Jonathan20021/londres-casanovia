@@ -325,32 +325,54 @@ function product_card(array $p): string
 }
 
 /* ================================================================== *
- *  LOCKUP DE MARCA (cabina + LONDRES + Casa de Novias)
+ *  LOCKUP DE MARCA — logo oficial de LONDRES Casa de Novias
  *  brand_lockup('light'|'dark', 'sm'|'md'|'lg')
+ *
+ *  El logo es un SVG vectorial sin fondo (public/assets/img/logo-londres.svg)
+ *  extraído del original. La tipografía va con `currentColor`, así que el
+ *  mismo archivo sirve sobre fondo claro (tinta oscura) y sobre fondo oscuro
+ *  (tinta blanca); la cabina conserva siempre su rojo original.
  * ================================================================== */
 function brand_lockup(string $tone = 'dark', string $size = 'md'): string
 {
-    // Si hay logo subido en configuración, úsalo
+    $alt = e(setting('business_name', APP_NAME));
+
+    // Un logo subido desde Configuración tiene prioridad sobre el oficial
     $custom = setting('logo');
     if (!empty($custom)) {
         $h = ['sm' => 'h-9', 'md' => 'h-11', 'lg' => 'h-16'][$size] ?? 'h-11';
-        return '<img src="' . e(upload_url($custom)) . '" alt="' . e(setting('business_name', APP_NAME)) . '" class="' . $h . ' w-auto object-contain">';
+        return '<img src="' . e(upload_url($custom)) . '" alt="' . $alt . '" class="' . $h . ' w-auto object-contain">';
     }
 
-    $text   = $tone === 'light' ? 'text-white' : 'text-brand-dark';
+    // Altura por tamaño (el ancho se ajusta solo: el SVG mantiene su proporción)
+    $h = ['sm' => 'h-9', 'md' => 'h-12', 'lg' => 'h-20'][$size] ?? 'h-12';
+    $ink = $tone === 'light' ? 'text-white' : 'text-brand-dark';
+
+    $logo = LCN_ROOT . '/public/assets/img/logo-londres.svg';
+    if (is_file($logo)) {
+        // Se incrusta el SVG para que `currentColor` herede el tono del contexto.
+        $svg = (string) file_get_contents($logo);
+        $svg = preg_replace(
+            '/<svg /',
+            '<svg class="' . $h . ' w-auto" ',
+            $svg,
+            1
+        );
+        return '<span class="' . $ink . ' inline-flex items-center" role="img" aria-label="' . $alt . '">' . $svg . '</span>';
+    }
+
+    // Respaldo tipográfico por si faltara el archivo
     $script = $tone === 'light' ? 'text-brand-gold' : 'text-brand-red';
     $sizes  = [
-        'sm' => ['mark' => 'h-8',  'word' => 'text-xl',  'sub' => 'text-xs'],
-        'md' => ['mark' => 'h-10', 'word' => 'text-2xl', 'sub' => 'text-sm'],
-        'lg' => ['mark' => 'h-16', 'word' => 'text-4xl', 'sub' => 'text-lg'],
-    ][$size] ?? ['mark' => 'h-10', 'word' => 'text-2xl', 'sub' => 'text-sm'];
+        'sm' => ['word' => 'text-xl',  'sub' => 'text-xs'],
+        'md' => ['word' => 'text-2xl', 'sub' => 'text-sm'],
+        'lg' => ['word' => 'text-4xl', 'sub' => 'text-lg'],
+    ][$size] ?? ['word' => 'text-2xl', 'sub' => 'text-sm'];
 
-    return '<span class="inline-flex items-center gap-2.5">'
-         . '<img src="' . asset('img/logo-mark.svg') . '" alt="" class="' . $sizes['mark'] . ' w-auto">'
-         . '<span class="flex flex-col leading-none">'
-         . '<span class="font-serif font-bold tracking-[0.18em] ' . $sizes['word'] . ' ' . $text . '">LONDRES</span>'
+    return '<span class="inline-flex flex-col leading-none">'
+         . '<span class="font-serif font-bold tracking-[0.18em] ' . $sizes['word'] . ' ' . $ink . '">LONDRES</span>'
          . '<span class="font-script ' . $sizes['sub'] . ' ' . $script . ' -mt-0.5 ml-0.5">Casa de Novias</span>'
-         . '</span></span>';
+         . '</span>';
 }
 
 /* ================================================================== *

@@ -95,13 +95,12 @@ $cut = static function (?string $s, int $max): string {
         <div class="band">
             <table style="width:100%"><tr>
                 <td style="width:64%; vertical-align:middle">
-                    <table><tr>
-                        <?php if ($logo): ?><td style="width:34px; vertical-align:middle"><img src="<?= $logo ?>" style="width:28px"></td><?php endif; ?>
-                        <td style="vertical-align:middle">
-                            <div class="brand">LONDRES</div>
-                            <div class="sub">Casa de Novias</div>
-                        </td>
-                    </tr></table>
+                    <?php if ($logo): ?>
+                        <img src="<?= $logo ?>" style="width:132px" alt="LONDRES Casa de Novias">
+                    <?php else: ?>
+                        <div class="brand">LONDRES</div>
+                        <div class="sub">Casa de Novias</div>
+                    <?php endif; ?>
                 </td>
                 <td style="vertical-align:middle" class="meta">
                     <strong>ETIQUETAS DE INVENTARIO</strong><br>
