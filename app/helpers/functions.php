@@ -187,6 +187,22 @@ function format_date($date, string $fmt = 'd/m/Y'): string
 
 function format_datetime($date): string { return format_date($date, 'd/m/Y h:i A'); }
 
+/** Hora suelta ("14:30" / "14:30:00") en formato 12 h. Vacía => ''. */
+function format_time($time, string $fmt = 'h:i A'): string
+{
+    if (empty($time) || $time === '00:00:00') return '';
+    try { return (new DateTime('2000-01-01 ' . $time))->format($fmt); }
+    catch (Exception $e) { return (string) $time; }
+}
+
+/** "29/07/2026 · 10:30 AM" (la hora solo si existe). */
+function format_date_time($date, $time): string
+{
+    $out = format_date($date);
+    $hh  = format_time($time);
+    return $hh !== '' ? $out . ' · ' . $hh : $out;
+}
+
 /** Días entre dos fechas (puede ser negativo). */
 function days_between($from, $to): int
 {

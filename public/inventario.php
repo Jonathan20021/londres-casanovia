@@ -97,9 +97,12 @@ if ($dateValid !== null) {
         $place[]        = ':' . $key;
         $params[$key]   = $st;
     }
+    // Se consultan rental_items (no rentals.product_id): un alquiler puede
+    // llevar varias piezas y todas quedan ocupadas, no solo la principal.
     // Dos placeholders distintos: PDO (sin emulación) no permite reusar uno.
     $where[]            = 'p.id NOT IN (
-        SELECT r.product_id FROM rentals r
+        SELECT ri.product_id FROM rental_items ri
+        JOIN rentals r ON r.id = ri.rental_id
         WHERE r.rental_status IN (' . implode(',', $place) . ')
           AND r.delivery_date <= :avd1
           AND r.return_date   >= :avd2

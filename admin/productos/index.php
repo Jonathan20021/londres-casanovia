@@ -20,7 +20,7 @@ $view       = get_param('view', 'grid');
 $priceMin   = (float) get_param('price_min', '0');
 $priceMax   = (float) get_param('price_max', '0');
 
-$allowedTypes = ['rental', 'sale', 'both'];
+$allowedTypes = ['rental', 'sale', 'both', 'complement'];
 $allowedComm  = ['available', 'reserved', 'rented', 'sold', 'unavailable', 'maintenance'];
 $allowedSorts = ['recent', 'name', 'price_low', 'price_high'];
 if (!in_array($type, $allowedTypes, true))     $type = '';
@@ -38,7 +38,12 @@ if ($q !== '') {
     $params['q'] = '%' . $q . '%';
 }
 if ($categoryId > 0) { $where[] = 'p.category_id = :cat'; $params['cat'] = $categoryId; }
-if ($type !== '')    { $where[] = 'p.type = :type';       $params['type'] = $type; }
+if ($type === 'complement') {
+    $where[] = 'p.is_complement = 1';
+} elseif ($type !== '') {
+    $where[] = 'p.type = :type';
+    $params['type'] = $type;
+}
 if ($comStatus !== '') { $where[] = 'p.commercial_status = :com'; $params['com'] = $comStatus; }
 if ($priceMin > 0)   { $where[] = 'p.rental_price >= :pmin'; $params['pmin'] = $priceMin; }
 if ($priceMax > 0)   { $where[] = 'p.rental_price <= :pmax'; $params['pmax'] = $priceMax; }
@@ -143,6 +148,7 @@ $radioCls = 'h-4 w-4 border-gray-300 text-brand-red focus:ring-brand-red/40';
                     <option value="rental" <?= $type === 'rental' ? 'selected' : '' ?>>Alquiler</option>
                     <option value="sale"   <?= $type === 'sale'   ? 'selected' : '' ?>>Venta</option>
                     <option value="both"   <?= $type === 'both'   ? 'selected' : '' ?>>Alquiler y venta</option>
+                    <option value="complement" <?= $type === 'complement' ? 'selected' : '' ?>>Complementos</option>
                 </select>
             </div>
 

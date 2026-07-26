@@ -40,6 +40,10 @@ if (is_post()) {
     $data['initial_payment_percentage'] = max(0, min(100, $initialPct));
     $data['tax_percentage']             = max(0, min(100, $taxPct));
 
+    // Mora: monto fijo por día laborable de atraso
+    $data['late_fee_per_day']  = max(0, (float) post('late_fee_per_day', 500));
+    $data['late_fee_workweek'] = post('late_fee_workweek') === 'mon_sat' ? 'mon_sat' : 'mon_fri';
+
     // Validaciones mínimas
     if ($data['business_name'] === '') {
         $errors['business_name'] = 'El nombre del negocio es obligatorio.';
@@ -234,6 +238,21 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
                 <input type="number" id="tax_percentage" name="tax_percentage"
                        value="<?= e((string) $val('tax_percentage', '0')) ?>"
                        min="0" max="100" step="0.01" class="lcn-input">
+            </div>
+            <div>
+                <label for="late_fee_per_day" class="lcn-label">Penalidad por mora (por día laborable)</label>
+                <input type="number" id="late_fee_per_day" name="late_fee_per_day"
+                       value="<?= e((string) $val('late_fee_per_day', '500')) ?>"
+                       min="0" step="0.01" class="lcn-input">
+                <p class="mt-1.5 text-xs text-gray-400">Monto fijo que se cobra por cada día laborable de atraso en la devolución.</p>
+            </div>
+            <div>
+                <label for="late_fee_workweek" class="lcn-label">Días laborables para la mora</label>
+                <select id="late_fee_workweek" name="late_fee_workweek" class="lcn-input">
+                    <option value="mon_fri" <?= $val('late_fee_workweek', 'mon_fri') === 'mon_fri' ? 'selected' : '' ?>>Lunes a viernes</option>
+                    <option value="mon_sat" <?= $val('late_fee_workweek', 'mon_fri') === 'mon_sat' ? 'selected' : '' ?>>Lunes a sábado</option>
+                </select>
+                <p class="mt-1.5 text-xs text-gray-400">Los días excluidos no generan penalidad.</p>
             </div>
             <div>
                 <label for="currency" class="lcn-label">Moneda</label>

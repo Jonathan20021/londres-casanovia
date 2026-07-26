@@ -42,6 +42,15 @@ los archivos y dejar el sitio en línea.
    su código automáticamente al abrir *Inventario → Códigos de barra*.
    Las etiquetas usan la extensión **GD** de PHP (activa por defecto en cPanel); si no estuviera,
    el PDF dibuja las barras igualmente con un método alterno.
+8. **Migración de ajustes 2026‑07‑26** (obligatoria al subir esta versión sobre una BD existente):
+   `mysql -h HOST -u USER -p -D BD --default-character-set=utf8mb4 < database/migrations/2026_07_26_ajustes_cliente.sql`.
+   Añade complementos, mora fija por día laborable, descuento en % y fecha real de devolución.
+   Tras importarla, revise *Configuración → Facturación* para ajustar el monto de la mora
+   (RD$500 por defecto) y si el sábado cuenta como día laborable.
+9. **Migración de hora de entrega y modificaciones** (también obligatoria en esta versión):
+   `mysql -h HOST -u USER -p -D BD --default-character-set=utf8mb4 < database/migrations/2026_07_26_hora_entrega_modificaciones.sql`.
+   Añade la hora de entrega del alquiler y el control de piezas por modificar (ruedo, cintura…)
+   que alimenta la columna *Por modificar* del tablero.
 
 ## 4. Acceso
 

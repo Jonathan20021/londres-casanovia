@@ -67,7 +67,9 @@ $docTitle  = 'Recibo ' . ($payment['payment_number'] ?? '') . ' · ' . $bizName;
         @media print {
             .no-print { display: none !important; }
             .print-area { box-shadow: none !important; border: 0 !important; margin: 0 !important; max-width: 100% !important; }
-            html, body { background: #fff !important; }
+            /* Sin alto al 100% ni márgenes: evita la hoja en blanco al final */
+            html, body { background: #fff !important; height: auto !important; margin: 0 !important; padding: 0 !important; }
+            main { margin: 0 !important; padding: 0 !important; max-width: 100% !important; }
         }
     </style>
 </head>

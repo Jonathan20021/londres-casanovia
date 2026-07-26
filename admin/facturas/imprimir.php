@@ -18,7 +18,7 @@ $invoice = db_one(
     "SELECT i.*,
             c.full_name AS customer_name, c.phone AS customer_phone, c.whatsapp AS customer_whatsapp,
             c.email AS customer_email, c.address AS customer_address, c.document_number AS customer_document,
-            r.rental_number, r.delivery_date, r.return_date, r.event_date,
+            r.rental_number, r.delivery_date, r.delivery_time, r.return_date, r.event_date,
             s.sale_number,
             pr.name AS rental_product, ps.name AS sale_product,
             usr.name AS created_by_name

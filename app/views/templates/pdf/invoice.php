@@ -14,42 +14,46 @@ $logo = pdf_logo_uri();
 <style>
   @page { margin: 0; }
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family:'DejaVu Sans',sans-serif; color:#23232a; font-size:12px; line-height:1.5; }
+  body { font-family:'DejaVu Sans',sans-serif; color:#23232a; font-size:11px; line-height:1.4; }
   .serif { font-family:'DejaVu Serif',serif; }
-  .band { background:#0B0B0C; padding:24px 40px; }
-  .band .brand { font-family:'DejaVu Serif',serif; font-size:23px; letter-spacing:5px; color:#fff; line-height:1; }
-  .band .sub { font-family:'DejaVu Serif',serif; font-style:italic; color:#C9A86A; font-size:12px; margin-top:3px; }
-  .band h1 { font-family:'DejaVu Serif',serif; font-size:24px; letter-spacing:3px; color:#fff; }
-  .band .meta { color:#C9A86A; font-size:10.5px; margin-top:6px; }
-  .goldrule { height:4px; background:#C9A86A; }
-  .body { padding:26px 40px 40px; }
+  .band { background:#0B0B0C; padding:16px 32px; }
+  .band .brand { font-family:'DejaVu Serif',serif; font-size:20px; letter-spacing:5px; color:#fff; line-height:1; }
+  .band .sub { font-family:'DejaVu Serif',serif; font-style:italic; color:#C9A86A; font-size:11px; margin-top:2px; }
+  .band h1 { font-family:'DejaVu Serif',serif; font-size:21px; letter-spacing:3px; color:#fff; }
+  .band .meta { color:#C9A86A; font-size:10px; margin-top:4px; }
+  .goldrule { height:3px; background:#C9A86A; }
+  .body { padding:16px 32px 22px; }
   .biz { font-size:10px; color:#777; }
   .badge { display:inline-block; padding:4px 12px; border-radius:20px; font-size:10px; color:#fff; }
   .label { font-size:9px; text-transform:uppercase; letter-spacing:1.5px; color:#A98E63; font-weight:bold; }
-  .parties { width:100%; border-collapse:separate; border-spacing:0; margin-top:18px; }
-  .parties td { width:50%; vertical-align:top; padding:14px 16px; background:#FAF7F1; border:1px solid #EEE7DA; }
+  .parties { width:100%; border-collapse:separate; border-spacing:0; margin-top:12px; }
+  .parties td { width:50%; vertical-align:top; padding:9px 12px; background:#FAF7F1; border:1px solid #EEE7DA; }
   .parties td.first { border-right:none; }
-  .name { font-weight:bold; font-size:13px; margin-top:3px; color:#1a1a1d; }
-  table.items { width:100%; border-collapse:collapse; margin-top:26px; }
-  table.items th { background:#0B0B0C; color:#fff; font-size:9.5px; text-transform:uppercase; letter-spacing:1.2px; text-align:left; padding:10px 14px; }
+  .name { font-weight:bold; font-size:12px; margin-top:2px; color:#1a1a1d; }
+  table.items { width:100%; border-collapse:collapse; margin-top:18px; }
+  table.items th { background:#0B0B0C; color:#fff; font-size:9px; text-transform:uppercase; letter-spacing:1.2px; text-align:left; padding:6px 10px; }
   table.items th.r, table.items td.r { text-align:right; }
-  table.items td { padding:12px 14px; border-bottom:1px solid #eee; }
+  /* Filas compactas: caben más de 10 artículos en una sola hoja */
+  table.items td { padding:5px 10px; border-bottom:1px solid #eee; font-size:11px; }
+  table.items td.num { color:#aaa; font-size:10px; width:20px; }
   table.items tr:nth-child(even) td { background:#FBFAF8; }
-  .totwrap { width:100%; margin-top:16px; }
+  .parties .row { margin-top:2px; }
+  .parties .k { color:#7a7a7a; font-weight:bold; }
+  .totwrap { width:100%; margin-top:10px; }
   .totals { width:46%; float:right; border-collapse:collapse; }
-  .totals td { padding:7px 14px; font-size:12px; }
+  .totals td { padding:4px 12px; font-size:11px; }
   .totals td.r { text-align:right; }
   .totals tr.sep td { border-top:1px solid #e8e8e8; }
   .totals tr.grand td { background:<?= e($primary) ?>; color:#fff; font-weight:bold; font-size:14px; }
   .totals tr.bal td { font-weight:bold; color:<?= e($primary) ?>; }
   .clear { clear:both; }
-  .pays { width:100%; border-collapse:collapse; margin-top:30px; }
+  .pays { width:100%; border-collapse:collapse; margin-top:16px; }
   .pays caption { text-align:left; }
-  .pays th { text-align:left; font-size:9px; text-transform:uppercase; letter-spacing:1px; color:#999; border-bottom:1.5px solid #e6e6e6; padding:7px 8px; }
-  .pays td { padding:7px 8px; border-bottom:1px solid #f2f2f2; font-size:11px; }
-  .foot { margin-top:34px; border-top:2px solid #C9A86A; padding-top:14px; }
-  .thanks { font-family:'DejaVu Serif',serif; font-style:italic; color:<?= e($primary) ?>; font-size:15px; }
-  .policy { font-size:9.5px; color:#888; margin-top:6px; }
+  .pays th { text-align:left; font-size:9px; text-transform:uppercase; letter-spacing:1px; color:#999; border-bottom:1.5px solid #e6e6e6; padding:4px 8px; }
+  .pays td { padding:4px 8px; border-bottom:1px solid #f2f2f2; font-size:10px; }
+  .foot { margin-top:18px; border-top:2px solid #C9A86A; padding-top:10px; }
+  .thanks { font-family:'DejaVu Serif',serif; font-style:italic; color:<?= e($primary) ?>; font-size:13px; }
+  .policy { font-size:9px; color:#888; margin-top:4px; }
 </style></head>
 <body>
   <div class="band">
@@ -84,26 +88,31 @@ $logo = pdf_logo_uri();
     <table class="parties"><tr>
       <td class="first">
         <div class="label">Facturar a</div>
-        <div class="name"><?= e($customer['full_name'] ?? $invoice['customer_name'] ?? '') ?></div>
-        <?php if (!empty($customer['document_number'])): ?>Doc: <?= e($customer['document_number']) ?><br><?php endif; ?>
-        <?php if (!empty($customer['phone'])): ?><?= e($customer['phone']) ?><br><?php endif; ?>
-        <?php if (!empty($customer['email'])): ?><?= e($customer['email']) ?><br><?php endif; ?>
-        <?php if (!empty($customer['address'])): ?><?= e($customer['address']) ?><?php endif; ?>
+        <div class="row"><span class="k">Cliente:</span> <span class="name" style="display:inline; margin:0"><?= e($customer['full_name'] ?? $invoice['customer_name'] ?? '—') ?></span></div>
+        <div class="row"><span class="k">Cédula:</span> <?= e(!empty($customer['document_number']) ? $customer['document_number'] : '—') ?></div>
+        <div class="row"><span class="k">Teléfono:</span> <?= e(!empty($customer['phone']) ? $customer['phone'] : '—') ?></div>
+        <div class="row"><span class="k">Dirección:</span> <?= e(!empty($customer['address']) ? $customer['address'] : '—') ?></div>
+        <?php if (!empty($customer['email'])): ?><div class="row"><span class="k">Correo:</span> <?= e($customer['email']) ?></div><?php endif; ?>
       </td>
       <td>
         <div class="label">Referencia</div>
         <div class="name"><?= e($invoice['rental_number'] ?: ($invoice['sale_number'] ?: '—')) ?></div>
         <?php if (!empty($invoice['event_date'])): ?>Evento: <?= e(format_date($invoice['event_date'])) ?><br><?php endif; ?>
-        <?php if (!empty($invoice['delivery_date'])): ?>Entrega: <?= e(format_date($invoice['delivery_date'])) ?><br><?php endif; ?>
+        <?php if (!empty($invoice['delivery_date'])): ?>Entrega: <?= e(format_date_time($invoice['delivery_date'], $invoice['delivery_time'] ?? null)) ?><br><?php endif; ?>
         <?php if (!empty($invoice['return_date'])): ?>Devolución: <?= e(format_date($invoice['return_date'])) ?><?php endif; ?>
       </td>
     </tr></table>
 
     <table class="items">
-      <thead><tr><th>Concepto</th><th>Detalle</th><th class="r">Importe</th></tr></thead>
+      <thead><tr><th style="width:20px">#</th><th>Concepto</th><th>Detalle</th><th class="r">Importe</th></tr></thead>
       <tbody>
-        <?php foreach ($lines as $ln): ?>
-        <tr><td><?= e($ln['concept']) ?></td><td style="color:#777"><?= e($ln['detail']) ?></td><td class="r"><?= e(money($ln['amount'])) ?></td></tr>
+        <?php foreach ($lines as $i => $ln): ?>
+        <tr>
+          <td class="num"><?= (int) $i + 1 ?></td>
+          <td><?= e($ln['concept']) ?></td>
+          <td style="color:#777"><?= e($ln['detail']) ?></td>
+          <td class="r"><?= e(money($ln['amount'])) ?></td>
+        </tr>
         <?php endforeach; ?>
       </tbody>
     </table>

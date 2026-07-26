@@ -66,12 +66,15 @@ if (count($featured) < 4) {
 /* ------------------------------------------------------------------ *
  *  Más alquilados (piezas con mayor número de alquileres)
  * ------------------------------------------------------------------ */
+/* Cuenta por rental_items: un alquiler puede llevar varias piezas y todas
+   deben sumar, no solo la principal (rentals.product_id). */
 $mostRented = db_all(
-    "SELECT p.*, c.name AS category_name, COUNT(r.id) AS rentals_count
+    "SELECT p.*, c.name AS category_name, COUNT(ri.id) AS rentals_count
      FROM products p
-     INNER JOIN rentals r ON r.product_id = p.id
+     INNER JOIN rental_items ri ON ri.product_id = p.id
+     INNER JOIN rentals r ON r.id = ri.rental_id
      LEFT JOIN categories c ON c.id = p.category_id
-     WHERE p.status = 'active'
+     WHERE p.status = 'active' AND r.rental_status <> 'cancelled'
      GROUP BY p.id
      ORDER BY rentals_count DESC, p.created_at DESC
      LIMIT 4"

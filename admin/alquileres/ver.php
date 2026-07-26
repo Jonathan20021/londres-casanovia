@@ -62,6 +62,16 @@ if (is_post()) {
 
         db_update('rentals', ['rental_status' => $new], 'id = :id', ['id' => $id]);
 
+        // Al devolver: registrar la fecha real y liquidar la mora acumulada
+        // (monto fijo por cada día laborable de atraso).
+        if ($new === 'returned') {
+            $late = apply_rental_late_penalty($id, $r['actual_return_date'] ?: date('Y-m-d'));
+            if ($late['late_days'] > 0) {
+                flash('warning', 'Devolución con ' . $late['late_days'] . ' día(s) laborable(s) de atraso: se aplicó una mora de '
+                    . money($late['late_penalty']) . '.');
+            }
+        }
+
         // Sincronizar commercial_status del producto
         $commercialMap = [
             'reserved'       => 'reserved',
@@ -211,10 +221,17 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
     </div>
 <?php endif; ?>
 <?php if ($isOverdue): ?>
+    <?php
+    $lateDays    = rental_late_days((string) $rental['return_date'], $rental['actual_return_date'] ?: null);
+    $latePenalty = round($lateDays * late_fee_per_day(), 2);
+    ?>
     <div class="mb-4 flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 shadow-soft">
         <span class="mt-0.5 text-rose-500"><?= icon('clock', 'w-5 h-5') ?></span>
         <div>Devolución vencida desde <strong><?= format_date($rental['return_date']) ?></strong>
-            (<?= abs(days_between($rental['return_date'], $today)) ?> día(s)). Considere aplicar penalidad por mora.</div>
+            (<?= abs(days_between($rental['return_date'], $today)) ?> día(s) corridos).
+            Mora acumulada: <strong><?= e(money($latePenalty)) ?></strong>
+            (<?= (int) $lateDays ?> día(s) laborable(s) × <?= e(money(late_fee_per_day())) ?>).
+            Se cobrará al registrar la devolución.</div>
     </div>
 <?php endif; ?>
 
@@ -260,7 +277,15 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
             <!-- Datos clave -->
             <div class="mt-6 grid grid-cols-2 gap-4 border-t border-gray-100 pt-5 text-sm sm:grid-cols-4">
                 <div><p class="text-xs uppercase tracking-wide text-gray-400">Evento</p><p class="mt-0.5 font-medium text-gray-900"><?= format_date($rental['event_date']) ?></p></div>
-                <div><p class="text-xs uppercase tracking-wide text-gray-400">Entrega</p><p class="mt-0.5 font-medium text-gray-900"><?= format_date($rental['delivery_date']) ?></p></div>
+                <div>
+                    <p class="text-xs uppercase tracking-wide text-gray-400">Entrega</p>
+                    <p class="mt-0.5 font-medium text-gray-900"><?= format_date($rental['delivery_date']) ?></p>
+                    <?php if (format_time($rental['delivery_time']) !== ''): ?>
+                        <p class="mt-0.5 inline-flex items-center gap-1 text-xs font-medium text-brand-red">
+                            <?= icon('clock', 'w-3.5 h-3.5') ?> <?= e(format_time($rental['delivery_time'])) ?>
+                        </p>
+                    <?php endif; ?>
+                </div>
                 <div><p class="text-xs uppercase tracking-wide text-gray-400">Devolución</p><p class="mt-0.5 font-medium <?= $isOverdue ? 'text-rose-600' : 'text-gray-900' ?>"><?= format_date($rental['return_date']) ?></p></div>
                 <div><p class="text-xs uppercase tracking-wide text-gray-400">Duración</p><p class="mt-0.5 font-medium text-gray-900"><?= e((string) max(0, days_between($rental['delivery_date'], $rental['return_date']))) ?> día(s)</p></div>
             </div>
@@ -277,32 +302,118 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
         <div class="rounded-2xl border border-gray-100 bg-white p-6 shadow-soft">
             <div class="flex items-center justify-between gap-3">
                 <h2 class="font-serif text-lg font-bold text-gray-900">Productos</h2>
-                <span class="rounded-full bg-brand-cream px-3 py-1 text-xs font-semibold text-brand-red"><?= count($rentalItems) ?> pieza(s)</span>
+                <div class="flex items-center gap-2">
+                    <?php $pendingHere = count(array_filter($rentalItems, static fn(array $i): bool => !empty($i['needs_alteration']) && $i['alteration_status'] === 'pending')); ?>
+                    <?php if ($pendingHere > 0): ?>
+                        <span class="inline-flex items-center gap-1 rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
+                            <?= icon('scissors', 'w-3.5 h-3.5') ?> <?= $pendingHere ?> por modificar
+                        </span>
+                    <?php endif; ?>
+                    <span class="rounded-full bg-brand-cream px-3 py-1 text-xs font-semibold text-brand-red"><?= count($rentalItems) ?> pieza(s)</span>
+                </div>
             </div>
             <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <?php foreach ($rentalItems as $item): ?>
-                    <div class="flex gap-3 rounded-2xl border border-gray-100 bg-gray-50/50 p-3">
-                        <img src="<?= e(upload_url($item['main_image'] ?? null)) ?>" alt="<?= e($item['name']) ?>"
-                             class="h-28 w-24 flex-none rounded-xl object-cover bg-white ring-1 ring-gray-100">
-                        <div class="min-w-0 flex-1">
-                            <div class="flex items-start justify-between gap-2">
-                                <h3 class="font-serif text-base text-gray-900"><?= e($item['name']) ?></h3>
-                                <?= status_badge($item['commercial_status'], 'commercial') ?>
+                <?php foreach ($rentalItems as $item):
+                    $needsAlteration = !empty($item['needs_alteration']);
+                    $alterationDone  = $needsAlteration && $item['alteration_status'] === 'done'; ?>
+                    <div class="flex flex-col gap-3 rounded-2xl border p-3 <?= $needsAlteration && !$alterationDone ? 'border-amber-200 bg-amber-50/40' : 'border-gray-100 bg-gray-50/50' ?>">
+                        <div class="flex gap-3">
+                            <img src="<?= e(upload_url($item['main_image'] ?? null)) ?>" alt="<?= e($item['name']) ?>"
+                                 class="h-28 w-24 flex-none rounded-xl object-cover bg-white ring-1 ring-gray-100">
+                            <div class="min-w-0 flex-1">
+                                <div class="flex items-start justify-between gap-2">
+                                    <h3 class="font-serif text-base text-gray-900"><?= e($item['name']) ?></h3>
+                                    <?= status_badge($item['commercial_status'], 'commercial') ?>
+                                </div>
+                                <p class="text-xs text-brand-red"><?= e($item['category_name'] ?? 'General') ?></p>
+                                <p class="mt-2 text-xs text-gray-500">
+                                    <?= e(implode(' · ', array_filter([
+                                        $item['barcode'] ?? $item['sku'] ?? '',
+                                        !empty($item['size']) ? 'Talla ' . $item['size'] : '',
+                                        $item['color'] ?? '',
+                                    ]))) ?>
+                                </p>
+                                <div class="mt-3 flex items-center justify-between gap-2">
+                                    <span class="text-sm font-semibold text-gray-900"><?= e(money($item['unit_price'])) ?></span>
+                                    <a href="<?= admin_url('productos/ver.php?id=' . (int) $item['id']) ?>" class="inline-flex items-center gap-1 text-xs font-medium text-brand-red hover:underline">
+                                        <?= icon('eye', 'w-3.5 h-3.5') ?> Ver ficha
+                                    </a>
+                                </div>
                             </div>
-                            <p class="text-xs text-brand-red"><?= e($item['category_name'] ?? 'General') ?></p>
-                            <p class="mt-2 text-xs text-gray-500">
-                                <?= e(implode(' · ', array_filter([
-                                    $item['barcode'] ?? $item['sku'] ?? '',
-                                    !empty($item['size']) ? 'Talla ' . $item['size'] : '',
-                                    $item['color'] ?? '',
-                                ]))) ?>
-                            </p>
-                            <div class="mt-3 flex items-center justify-between gap-2">
-                                <span class="text-sm font-semibold text-gray-900"><?= e(money($item['unit_price'])) ?></span>
-                                <a href="<?= admin_url('productos/ver.php?id=' . (int) $item['id']) ?>" class="inline-flex items-center gap-1 text-xs font-medium text-brand-red hover:underline">
-                                    <?= icon('eye', 'w-3.5 h-3.5') ?> Ver ficha
-                                </a>
+                        </div>
+
+                        <!-- Modificación de la pieza (ruedo, cintura…) -->
+                        <?php if ($needsAlteration): ?>
+                            <div class="rounded-xl border px-3 py-2.5 <?= $alterationDone ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50' ?>">
+                                <div class="flex items-center justify-between gap-2">
+                                    <span class="inline-flex items-center gap-1.5 text-xs font-semibold <?= $alterationDone ? 'text-emerald-700' : 'text-amber-800' ?>">
+                                        <?= icon('scissors', 'w-3.5 h-3.5') ?>
+                                        <?= $alterationDone ? 'Modificación lista' : 'Pendiente de modificar' ?>
+                                    </span>
+                                    <?php if ($alterationDone && !empty($item['alteration_done_at'])): ?>
+                                        <span class="text-[11px] text-emerald-600"><?= e(format_datetime($item['alteration_done_at'])) ?></span>
+                                    <?php endif; ?>
+                                </div>
+                                <?php if (!empty($item['alteration_notes'])): ?>
+                                    <p class="mt-1.5 text-[11px] leading-snug <?= $alterationDone ? 'text-emerald-900' : 'text-amber-900' ?>"><?= e($item['alteration_notes']) ?></p>
+                                <?php endif; ?>
+                                <div class="mt-2 flex flex-wrap items-center gap-2">
+                                    <form method="post" action="<?= admin_url('alquileres/modificacion.php') ?>">
+                                        <?= csrf_field() ?>
+                                        <input type="hidden" name="item_id" value="<?= (int) $item['rental_item_id'] ?>">
+                                        <input type="hidden" name="action" value="<?= $alterationDone ? 'pending' : 'done' ?>">
+                                        <button type="submit" class="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-white transition <?= $alterationDone ? 'bg-gray-500 hover:bg-gray-600' : 'bg-emerald-600 hover:bg-emerald-700' ?>">
+                                            <?= icon($alterationDone ? 'return' : 'check', 'w-3 h-3') ?>
+                                            <?= $alterationDone ? 'Reabrir' : 'Marcar lista' ?>
+                                        </button>
+                                    </form>
+                                    <button type="button" data-modal-open="modalAlter<?= (int) $item['rental_item_id'] ?>"
+                                            class="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-600 transition hover:bg-gray-50">
+                                        <?= icon('pencil', 'w-3 h-3') ?> Editar nota
+                                    </button>
+                                    <form method="post" action="<?= admin_url('alquileres/modificacion.php') ?>">
+                                        <?= csrf_field() ?>
+                                        <input type="hidden" name="item_id" value="<?= (int) $item['rental_item_id'] ?>">
+                                        <input type="hidden" name="action" value="remove">
+                                        <button type="submit" data-confirm="¿Quitar la modificación de esta pieza?"
+                                                class="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-medium text-gray-400 transition hover:text-rose-600">
+                                            <?= icon('trash', 'w-3 h-3') ?>
+                                        </button>
+                                    </form>
+                                </div>
                             </div>
+                        <?php else: ?>
+                            <button type="button" data-modal-open="modalAlter<?= (int) $item['rental_item_id'] ?>"
+                                    class="inline-flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-gray-200 px-3 py-2 text-xs font-medium text-gray-500 transition hover:border-brand-gold hover:text-brand-gold">
+                                <?= icon('scissors', 'w-3.5 h-3.5') ?> Marcar para modificar
+                            </button>
+                        <?php endif; ?>
+                    </div>
+
+                    <!-- Modal: nota de la modificación -->
+                    <div id="modalAlter<?= (int) $item['rental_item_id'] ?>" data-modal class="fixed inset-0 z-50 hidden items-center justify-center bg-brand-dark/50 p-4 backdrop-blur-sm">
+                        <div class="w-full max-w-md rounded-3xl bg-white p-6 shadow-card animate-scale-in">
+                            <div class="flex items-center justify-between">
+                                <h3 class="font-serif text-lg font-bold text-gray-900">Modificación · <?= e($item['name']) ?></h3>
+                                <button type="button" data-modal-close class="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100"><?= icon('x', 'w-5 h-5') ?></button>
+                            </div>
+                            <form method="post" action="<?= admin_url('alquileres/modificacion.php') ?>" class="mt-4 space-y-4">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="item_id" value="<?= (int) $item['rental_item_id'] ?>">
+                                <input type="hidden" name="action" value="save">
+                                <div>
+                                    <label class="lcn-label" for="note<?= (int) $item['rental_item_id'] ?>">¿Qué hay que modificarle?</label>
+                                    <textarea id="note<?= (int) $item['rental_item_id'] ?>" name="notes" rows="3" class="lcn-input"
+                                              placeholder="Ej.: reducir el ruedo 5 cm, coger de la cintura, ajustar tirantes…"><?= e($item['alteration_notes'] ?? '') ?></textarea>
+                                    <p class="mt-1.5 text-xs text-gray-400">La pieza aparecerá en la columna <strong>Por modificar</strong> del tablero.</p>
+                                </div>
+                                <div class="flex justify-end gap-2">
+                                    <button type="button" data-modal-close class="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50">Cancelar</button>
+                                    <button type="submit" class="inline-flex items-center gap-2 rounded-xl bg-brand-red px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700">
+                                        <?= icon('check', 'w-4 h-4') ?> Guardar
+                                    </button>
+                                </div>
+                            </form>
                         </div>
                     </div>
                 <?php endforeach; ?>
@@ -354,6 +465,14 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
                 <div class="rounded-xl bg-gray-50 px-4 py-3"><p class="text-xs uppercase tracking-wide text-gray-400">Pagado</p><p class="mt-1 text-lg font-semibold text-emerald-600"><?= e(money($paid)) ?></p></div>
                 <div class="rounded-xl bg-gray-50 px-4 py-3"><p class="text-xs uppercase tracking-wide text-gray-400">Saldo</p><p class="mt-1 text-lg font-semibold <?= $balance > 0 ? 'text-rose-600' : 'text-emerald-600' ?>"><?= e(money(max(0, $balance))) ?></p></div>
             </div>
+            <?php if ((float) $rental['late_penalty'] > 0): ?>
+                <p class="mt-3 text-xs text-rose-600">
+                    Incluye <?= e(money($rental['late_penalty'])) ?> de penalidad por mora
+                    <?php if (!empty($rental['actual_return_date'])): ?>
+                        (devuelto el <?= format_date($rental['actual_return_date']) ?>).
+                    <?php endif; ?>
+                </p>
+            <?php endif; ?>
         </div>
 
         <!-- Evidencias -->

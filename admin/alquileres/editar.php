@@ -37,13 +37,14 @@ $statusOptions = ['reserved','confirmed','delivered','pending_return','returned'
 $errors   = [];
 $conflict = null;
 $form = [
-    'event_date'    => $rental['event_date'] ?? '',
-    'delivery_date' => $rental['delivery_date'],
-    'return_date'   => $rental['return_date'],
-    'rental_price'  => $rental['rental_price'],
-    'discount'      => $rental['discount'],
-    'late_penalty'  => $rental['late_penalty'],
-    'rental_status' => $rental['rental_status'],
+    'event_date'         => $rental['event_date'] ?? '',
+    'delivery_date'      => $rental['delivery_date'],
+    'delivery_time'      => $rental['delivery_time'] ? substr((string) $rental['delivery_time'], 0, 5) : '',
+    'return_date'        => $rental['return_date'],
+    'actual_return_date' => $rental['actual_return_date'] ?? '',
+    'rental_price'       => $rental['rental_price'],
+    'discount_percent'   => $rental['discount_percent'] ?? 0,
+    'rental_status'      => $rental['rental_status'],
     'authorized_delivery_without_full_payment' => (int) $rental['authorized_delivery_without_full_payment'],
     'authorization_reason' => $rental['authorization_reason'] ?? '',
 ];
@@ -52,13 +53,14 @@ if (is_post()) {
     require_csrf();
 
     $form = [
-        'event_date'    => trim((string) post('event_date', '')),
-        'delivery_date' => trim((string) post('delivery_date', '')),
-        'return_date'   => trim((string) post('return_date', '')),
-        'rental_price'  => (float) post('rental_price', 0),
-        'discount'      => (float) post('discount', 0),
-        'late_penalty'  => (float) post('late_penalty', 0),
-        'rental_status' => (string) post('rental_status', $rental['rental_status']),
+        'event_date'         => trim((string) post('event_date', '')),
+        'delivery_date'      => trim((string) post('delivery_date', '')),
+        'delivery_time'      => trim((string) post('delivery_time', '')),
+        'return_date'        => trim((string) post('return_date', '')),
+        'actual_return_date' => trim((string) post('actual_return_date', '')),
+        'rental_price'       => (float) post('rental_price', 0),
+        'discount_percent'   => (float) post('discount_percent', 0),
+        'rental_status'      => (string) post('rental_status', $rental['rental_status']),
         'authorized_delivery_without_full_payment' => (int) (post('authorized_delivery_without_full_payment') ? 1 : 0),
         'authorization_reason' => trim((string) post('authorization_reason', '')),
     ];
@@ -70,14 +72,32 @@ if (is_post()) {
         && strtotime($form['return_date']) < strtotime($form['delivery_date'])) {
         $errors[] = 'La fecha de devolución no puede ser anterior a la de entrega.';
     }
-    if ($form['rental_price'] <= 0) $errors[] = 'El precio de alquiler debe ser mayor que cero.';
-    if ($form['discount'] < 0 || $form['late_penalty'] < 0) $errors[] = 'Los montos no pueden ser negativos.';
+    if ($form['actual_return_date'] !== '' && $form['delivery_date'] !== ''
+        && strtotime($form['actual_return_date']) < strtotime($form['delivery_date'])) {
+        $errors[] = 'La fecha real de devolución no puede ser anterior a la de entrega.';
+    }
+    if ($form['delivery_time'] !== '' && !preg_match('/^\d{1,2}:\d{2}(:\d{2})?$/', $form['delivery_time'])) {
+        $errors[] = 'La hora de entrega no es válida.';
+        $form['delivery_time'] = '';
+    }
+    if ($form['rental_price'] < 0) $errors[] = 'El precio de alquiler no puede ser negativo.';
+    if ($form['discount_percent'] < 0 || $form['discount_percent'] > 100) {
+        $errors[] = 'El descuento debe estar entre 0% y 100%.';
+        $form['discount_percent'] = max(0, min(100, $form['discount_percent']));
+    }
     if (!in_array($form['rental_status'], $statusOptions, true)) {
         $errors[] = 'Estado de alquiler inválido.';
     }
 
     // --- Recalcular totales (necesario para la regla de entrega) ---
-    $total = round($form['rental_price'] - $form['discount'] + $form['late_penalty'], 2);
+    // El descuento se guarda como monto, pero se captura en porcentaje.
+    $discountAmount = round($form['rental_price'] * ($form['discount_percent'] / 100), 2);
+    // La mora es automática: monto fijo por día laborable de atraso.
+    $latePenalty = rental_late_penalty(
+        $form['return_date'] !== '' ? $form['return_date'] : (string) $rental['return_date'],
+        $form['actual_return_date'] !== '' ? $form['actual_return_date'] : null
+    );
+    $total = round($form['rental_price'] - $discountAmount + $latePenalty, 2);
     if ($total < 0) $total = 0.0;
     $paid    = rental_paid_amount($id);
     $balance = round($total - $paid, 2);
@@ -132,10 +152,13 @@ if (is_post()) {
         db_update('rentals', [
             'event_date'    => $form['event_date'] !== '' ? $form['event_date'] : null,
             'delivery_date' => $form['delivery_date'],
+            'delivery_time' => $form['delivery_time'] !== '' ? $form['delivery_time'] : null,
             'return_date'   => $form['return_date'],
+            'actual_return_date' => $form['actual_return_date'] !== '' ? $form['actual_return_date'] : null,
             'rental_price'  => $form['rental_price'],
-            'discount'      => $form['discount'],
-            'late_penalty'  => $form['late_penalty'],
+            'discount'      => $discountAmount,
+            'discount_percent' => $form['discount_percent'],
+            'late_penalty'  => $latePenalty,
             'total_amount'  => $total,
             'initial_payment_required' => $calc['initial'],
             'remaining_balance' => max(0, $balance),
@@ -167,7 +190,7 @@ if (is_post()) {
             else                       $invStatus = 'paid';
             db_update('invoices', [
                 'subtotal'    => $form['rental_price'],
-                'discount'    => $form['discount'],
+                'discount'    => $discountAmount,
                 'total'       => $total,
                 'paid_amount' => $paid,
                 'balance'     => max(0, $balance),
@@ -242,7 +265,7 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
         <!-- Fechas -->
         <div class="rounded-2xl border border-gray-100 bg-white p-6 shadow-soft">
             <h2 class="font-serif text-lg font-bold text-gray-900">Fechas</h2>
-            <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <div>
                     <label class="lcn-label" for="event_date">Fecha del evento</label>
                     <input type="date" id="event_date" name="event_date" value="<?= e((string) $form['event_date']) ?>" class="lcn-input">
@@ -252,9 +275,22 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
                     <input type="date" id="delivery_date" name="delivery_date" value="<?= e((string) $form['delivery_date']) ?>" class="lcn-input" required>
                 </div>
                 <div>
-                    <label class="lcn-label" for="return_date">Devolución</label>
+                    <label class="lcn-label" for="delivery_time">Hora de entrega</label>
+                    <input type="time" id="delivery_time" name="delivery_time" value="<?= e((string) $form['delivery_time']) ?>" class="lcn-input">
+                </div>
+                <div>
+                    <label class="lcn-label" for="return_date">Devolución pactada</label>
                     <input type="date" id="return_date" name="return_date" value="<?= e((string) $form['return_date']) ?>" class="lcn-input" required>
                 </div>
+            </div>
+            <div class="mt-4">
+                <label class="lcn-label" for="actual_return_date">Fecha real de devolución</label>
+                <input type="date" id="actual_return_date" name="actual_return_date"
+                       value="<?= e((string) $form['actual_return_date']) ?>" class="lcn-input sm:max-w-xs">
+                <p class="mt-1.5 text-xs text-gray-400">
+                    Déjela vacía mientras la pieza siga fuera: la mora se seguirá acumulando contra la fecha de hoy.
+                    Al marcar el alquiler como <strong>Devuelto</strong> se registra automáticamente.
+                </p>
             </div>
             <div class="mt-4 rounded-xl border border-dashed border-gray-200 bg-gray-50/60 p-4">
                 <div class="flex flex-wrap items-center justify-between gap-3">
@@ -281,12 +317,28 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
                     <input type="number" step="0.01" min="0" id="rental_price" name="rental_price" value="<?= e((string) $form['rental_price']) ?>" class="lcn-input" required>
                 </div>
                 <div>
-                    <label class="lcn-label" for="discount">Descuento</label>
-                    <input type="number" step="0.01" min="0" id="discount" name="discount" value="<?= e((string) $form['discount']) ?>" class="lcn-input">
+                    <label class="lcn-label" for="discount_percent">Descuento (%)</label>
+                    <div class="relative">
+                        <input type="number" step="0.01" min="0" max="100" id="discount_percent" name="discount_percent"
+                               value="<?= e((string) $form['discount_percent']) ?>" class="lcn-input pr-9">
+                        <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-gray-400">%</span>
+                    </div>
+                    <p class="mt-1 text-xs text-gray-400">Equivale a <span id="discountAmount" class="font-medium text-gray-600">—</span></p>
                 </div>
                 <div>
-                    <label class="lcn-label" for="late_penalty">Penalidad por mora</label>
-                    <input type="number" step="0.01" min="0" id="late_penalty" name="late_penalty" value="<?= e((string) $form['late_penalty']) ?>" class="lcn-input">
+                    <label class="lcn-label">Penalidad por mora</label>
+                    <?php
+                    $currentLateDays    = rental_late_days((string) $form['return_date'], $form['actual_return_date'] !== '' ? (string) $form['actual_return_date'] : null);
+                    $currentLatePenalty = round($currentLateDays * late_fee_per_day(), 2);
+                    ?>
+                    <div class="rounded-xl border px-3 py-2.5 text-sm <?= $currentLateDays > 0 ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-dashed border-gray-200 bg-gray-50/60 text-gray-600' ?>">
+                        <span class="font-semibold"><?= e(money($currentLatePenalty)) ?></span>
+                        <span class="text-xs"> · <?= (int) $currentLateDays ?> día(s) de atraso</span>
+                    </div>
+                    <p class="mt-1 text-xs text-gray-400">
+                        Automática: <?= e(money(late_fee_per_day())) ?> por cada día
+                        <?= late_fee_counts_saturday() ? 'de lunes a sábado' : 'de lunes a viernes' ?>.
+                    </p>
                 </div>
             </div>
             <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -356,25 +408,32 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
     var authBox = document.getElementById('authBox');
     var balance = <?= json_encode((float) max(0, $currentBalance)) ?>;
     var price = document.getElementById('rental_price');
-    var disc  = document.getElementById('discount');
-    var pen   = document.getElementById('late_penalty');
+    var discPct = document.getElementById('discount_percent');
+    var discAmountBox = document.getElementById('discountAmount');
     var totBox = document.getElementById('totBox');
     var currency = <?= json_encode((string) setting('currency', 'RD$')) ?>;
+    var latePenalty = <?= json_encode((float) $currentLatePenalty) ?>;
 
     function num(v){ var n = parseFloat(v); return isNaN(n) ? 0 : n; }
+    function money(v){ return currency + ' ' + num(v).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
 
     function toggleAuth() {
         var show = status.value === 'delivered' && balance > 0;
         authBox.classList.toggle('hidden', !show);
     }
     function recalc() {
-        var t = num(price.value) - num(disc.value) + num(pen.value);
+        var subtotal = num(price.value);
+        var pct = Math.min(100, Math.max(0, num(discPct.value)));
+        var discountAmount = Math.round(subtotal * pct) / 100;
+        discAmountBox.textContent = money(discountAmount);
+        var t = subtotal - discountAmount + latePenalty;
         if (t < 0) t = 0;
-        totBox.textContent = currency + ' ' + t.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        totBox.textContent = money(t);
     }
     status.addEventListener('change', toggleAuth);
-    [price, disc, pen].forEach(function (el) { el.addEventListener('input', recalc); });
+    [price, discPct].forEach(function (el) { el.addEventListener('input', recalc); });
     toggleAuth();
+    recalc();
 })();
 </script>
 

@@ -201,6 +201,23 @@ formulario de alta y queda visible en la ficha y en la edición del producto.
 - **Alquileres existentes:** ejecute también
   `database/migrations/2026_07_22_rental_items.sql` para habilitar varias piezas por alquiler y
   trasladar automáticamente los registros anteriores a su primera línea de detalle.
+- **Ajustes de 2026‑07‑26:** ejecute `database/migrations/2026_07_26_ajustes_cliente.sql`. Añade:
+  - `products.is_complement` → productos de tipo **Complemento** (corbata, corona, velo…), que
+    pueden costar RD$0 y cuyo precio se teclea al crear el alquiler/factura.
+  - `business_settings.late_fee_per_day` + `late_fee_workweek` → **penalidad por mora** de monto
+    fijo (RD$500 por defecto) por cada día laborable de atraso en la devolución. Se calcula sola:
+    se acumula mientras la pieza siga fuera y se liquida al marcar el alquiler como *Devuelto*.
+  - `rentals.discount_percent` → el **descuento se captura en porcentaje** (se guarda además el
+    monto equivalente en `rentals.discount`).
+  - `rentals.actual_return_date` → fecha real de devolución, base del cálculo de la mora.
+- **Hora de entrega y modificaciones:** ejecute también
+  `database/migrations/2026_07_26_hora_entrega_modificaciones.sql`. Añade:
+  - `rentals.delivery_time` → **hora de entrega** junto a la fecha (se muestra en el alquiler,
+    el listado, el tablero, la factura y el contrato).
+  - `rental_items.needs_alteration` + `alteration_notes` + `alteration_status` →
+    piezas marcadas para **MODIFICAR** (ruedo, cintura…) con su nota de taller. Se marcan al
+    crear el alquiler (botón *Modificar* en cada pieza) o desde el detalle del alquiler, y se
+    controlan en la columna **Por modificar** del tablero, donde se dan por listas.
 
 ---
 

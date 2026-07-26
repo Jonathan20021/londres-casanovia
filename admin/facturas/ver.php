@@ -12,7 +12,7 @@ $invoice = db_one(
     "SELECT i.*,
             c.full_name AS customer_name, c.phone AS customer_phone, c.whatsapp AS customer_whatsapp,
             c.email AS customer_email, c.address AS customer_address, c.document_number AS customer_document,
-            r.rental_number, r.delivery_date, r.return_date, r.event_date,
+            r.rental_number, r.delivery_date, r.delivery_time, r.return_date, r.event_date,
             s.sale_number,
             pr.name AS rental_product, ps.name AS sale_product,
             usr.name AS created_by_name
@@ -124,13 +124,30 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
                 <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
                     <div>
                         <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Facturar a</p>
-                        <p class="mt-1.5 font-semibold text-gray-900"><?= e($invoice['customer_name']) ?></p>
-                        <div class="mt-1 space-y-0.5 text-sm text-gray-500">
-                            <?php if ($invoice['customer_document']): ?><p>Doc.: <?= e($invoice['customer_document']) ?></p><?php endif; ?>
-                            <?php if ($invoice['customer_phone']): ?><p><?= e($invoice['customer_phone']) ?></p><?php endif; ?>
-                            <?php if ($invoice['customer_email']): ?><p><?= e($invoice['customer_email']) ?></p><?php endif; ?>
-                            <?php if ($invoice['customer_address']): ?><p><?= e($invoice['customer_address']) ?></p><?php endif; ?>
-                        </div>
+                        <dl class="mt-1.5 space-y-0.5 text-sm text-gray-700">
+                            <div class="flex gap-1.5">
+                                <dt class="font-semibold text-gray-500">Cliente:</dt>
+                                <dd class="font-semibold text-gray-900"><?= e($invoice['customer_name']) ?></dd>
+                            </div>
+                            <div class="flex gap-1.5">
+                                <dt class="font-semibold text-gray-500">Cédula:</dt>
+                                <dd><?= e($invoice['customer_document'] ?: '—') ?></dd>
+                            </div>
+                            <div class="flex gap-1.5">
+                                <dt class="font-semibold text-gray-500">Teléfono:</dt>
+                                <dd><?= e($invoice['customer_phone'] ?: '—') ?></dd>
+                            </div>
+                            <div class="flex gap-1.5">
+                                <dt class="font-semibold text-gray-500">Dirección:</dt>
+                                <dd><?= e($invoice['customer_address'] ?: '—') ?></dd>
+                            </div>
+                            <?php if ($invoice['customer_email']): ?>
+                                <div class="flex gap-1.5">
+                                    <dt class="font-semibold text-gray-500">Correo:</dt>
+                                    <dd><?= e($invoice['customer_email']) ?></dd>
+                                </div>
+                            <?php endif; ?>
+                        </dl>
                     </div>
                     <div class="sm:text-right">
                         <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Detalles</p>
@@ -140,7 +157,7 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
                                 <p>Alquiler:
                                     <a href="<?= e(admin_url('alquileres/ver.php?id=' . (int) $invoice['rental_id'])) ?>" class="font-medium text-brand-red hover:underline"><?= e($invoice['rental_number']) ?></a>
                                 </p>
-                                <?php if ($invoice['delivery_date']): ?><p>Entrega: <?= format_date($invoice['delivery_date']) ?> · Devolución: <?= format_date($invoice['return_date']) ?></p><?php endif; ?>
+                                <?php if ($invoice['delivery_date']): ?><p>Entrega: <?= e(format_date_time($invoice['delivery_date'], $invoice['delivery_time'] ?? null)) ?> · Devolución: <?= format_date($invoice['return_date']) ?></p><?php endif; ?>
                             <?php endif; ?>
                             <?php if ($invoice['sale_number']): ?>
                                 <p>Venta:

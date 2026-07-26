@@ -59,7 +59,9 @@ $docTitle  = 'Contrato ' . ($rental['rental_number'] ?? '') . ' · ' . $bizName;
             .no-print { display: none !important; }
             .print-area { box-shadow: none !important; border: 0 !important; margin: 0 !important; max-width: 100% !important; }
             .break-avoid { break-inside: avoid; page-break-inside: avoid; }
-            html, body { background: #fff !important; }
+            /* Sin alto al 100% ni márgenes: evita la hoja en blanco al final */
+            html, body { background: #fff !important; height: auto !important; margin: 0 !important; padding: 0 !important; }
+            main { margin: 0 !important; padding: 0 !important; max-width: 100% !important; }
         }
     </style>
 </head>
@@ -147,6 +149,11 @@ $docTitle  = 'Contrato ' . ($rental['rental_number'] ?? '') . ' · ' . $bizName;
                                     <td class="px-5 py-3 text-gray-900">
                                         <p class="font-medium"><?= e($contractProduct['name'] ?? '—') ?></p>
                                         <p class="text-xs text-gray-400"><?= e($contractProduct['barcode'] ?? $contractProduct['sku'] ?? '') ?></p>
+                                        <?php if (!empty($contractProduct['needs_alteration'])): ?>
+                                            <p class="mt-1 text-xs font-semibold text-amber-700">
+                                                Por modificar<?= !empty($contractProduct['alteration_notes']) ? ': ' . e($contractProduct['alteration_notes']) : '' ?>
+                                            </p>
+                                        <?php endif; ?>
                                     </td>
                                     <td class="px-5 py-3 text-gray-600"><?= e(implode(' · ', array_filter([
                                         $contractProduct['category_name'] ?? '',
@@ -171,6 +178,9 @@ $docTitle  = 'Contrato ' . ($rental['rental_number'] ?? '') . ' · ' . $bizName;
                 <div class="rounded-xl border border-gray-200 px-5 py-4 text-center">
                     <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Entrega</p>
                     <p class="mt-1.5 text-base font-semibold text-gray-900"><?= e(format_date($rental['delivery_date'] ?? null)) ?></p>
+                    <?php if (format_time($rental['delivery_time'] ?? null) !== ''): ?>
+                        <p class="mt-0.5 text-sm font-semibold text-brand-red"><?= e(format_time($rental['delivery_time'])) ?></p>
+                    <?php endif; ?>
                 </div>
                 <div class="rounded-xl border border-gray-200 px-5 py-4 text-center">
                     <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Devolución</p>

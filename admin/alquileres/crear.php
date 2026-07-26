@@ -21,7 +21,7 @@ $customers = db_all("SELECT id, full_name, phone FROM customers ORDER BY full_na
 // Productos elegibles para alquiler (rental o both) y activos
 $products = db_all(
     "SELECT p.id, p.name, p.sku, p.barcode, p.rental_price, p.deposit_amount,
-            p.commercial_status, p.type, p.size, p.color, p.material, p.main_image,
+            p.commercial_status, p.type, p.is_complement, p.size, p.color, p.material, p.main_image,
             c.name AS category_name
        FROM products p
        LEFT JOIN categories c ON c.id = p.category_id
@@ -39,16 +39,19 @@ unset($catalogProduct);
  * ------------------------------------------------------------------ */
 $requestId = (int) get_param('request', '0');
 $prefill = [
-    'customer_id'   => '',
-    'product_id'    => (int) get_param('product', '0') ?: '',
-    'product_ids'   => (int) get_param('product', '0') > 0 ? [(int) get_param('product', '0')] : [],
-    'event_date'    => '',
-    'delivery_date' => '',
-    'return_date'   => '',
-    'rental_price'  => '',
-    'discount'      => '0',
-    'late_penalty'  => '0',
-    'rental_status' => 'reserved',
+    'customer_id'      => '',
+    'product_id'       => (int) get_param('product', '0') ?: '',
+    'product_ids'      => (int) get_param('product', '0') > 0 ? [(int) get_param('product', '0')] : [],
+    'item_prices'      => [],
+    'alterations'      => [],
+    'alteration_notes' => [],
+    'event_date'       => '',
+    'delivery_date'    => '',
+    'delivery_time'    => '',
+    'return_date'      => '',
+    'rental_price'     => '',
+    'discount_percent' => '0',
+    'initial_payment'  => '',
 ];
 $request = null;
 if ($requestId > 0) {
@@ -84,13 +87,16 @@ if (is_post()) {
             array_map('intval', (array) post('product_ids', [])),
             static fn(int $id): bool => $id > 0
         ))),
-        'event_date'    => trim((string) post('event_date', '')),
-        'delivery_date' => trim((string) post('delivery_date', '')),
-        'return_date'   => trim((string) post('return_date', '')),
-        'rental_price'  => (float) post('rental_price', 0),
-        'discount'      => (float) post('discount', 0),
-        'late_penalty'  => (float) post('late_penalty', 0),
-        'rental_status' => (string) post('rental_status', 'reserved'),
+        'item_prices'      => (array) post('item_prices', []),
+        'alterations'      => (array) post('alterations', []),
+        'alteration_notes' => (array) post('alteration_notes', []),
+        'event_date'       => trim((string) post('event_date', '')),
+        'delivery_date'    => trim((string) post('delivery_date', '')),
+        'delivery_time'    => trim((string) post('delivery_time', '')),
+        'return_date'      => trim((string) post('return_date', '')),
+        'rental_price'     => 0.0,   // se recalcula desde las líneas
+        'discount_percent' => (float) post('discount_percent', 0),
+        'initial_payment'  => trim((string) post('initial_payment', '')),
     ];
     $form['product_id'] = $form['product_ids'][0] ?? 0;
     $requestId = (int) post('request_id', $requestId);
@@ -104,11 +110,13 @@ if (is_post()) {
         && strtotime($form['return_date']) < strtotime($form['delivery_date'])) {
         $errors[] = 'La fecha de devolución no puede ser anterior a la de entrega.';
     }
-    if ($form['discount'] < 0 || $form['late_penalty'] < 0) $errors[] = 'Los montos no pueden ser negativos.';
-
-    // Estados de creación permitidos
-    if (!in_array($form['rental_status'], ['reserved', 'confirmed'], true)) {
-        $form['rental_status'] = 'reserved';
+    if ($form['discount_percent'] < 0 || $form['discount_percent'] > 100) {
+        $errors[] = 'El descuento debe estar entre 0% y 100%.';
+        $form['discount_percent'] = max(0, min(100, $form['discount_percent']));
+    }
+    if ($form['delivery_time'] !== '' && !preg_match('/^\d{1,2}:\d{2}(:\d{2})?$/', $form['delivery_time'])) {
+        $errors[] = 'La hora de entrega no es válida.';
+        $form['delivery_time'] = '';
     }
 
     // El cliente y el producto deben existir
@@ -133,13 +141,28 @@ if (is_post()) {
                 static fn(int $productId): array => $selectedById[$productId],
                 $form['product_ids']
             );
-            $form['rental_price'] = array_sum(array_map(
-                static fn(array $item): float => (float) $item['rental_price'],
-                $selectedProducts
-            ));
-            if ($form['rental_price'] <= 0) {
-                $errors[] = 'El precio total de los productos debe ser mayor que cero.';
+
+            // Los complementos (corbata, corona, velo…) llevan el precio que se
+            // teclea al facturar; el resto conserva el precio del catálogo.
+            $itemPrices = [];
+            foreach ($selectedProducts as $selectedProduct) {
+                $productId = (int) $selectedProduct['id'];
+                if (!empty($selectedProduct['is_complement'])) {
+                    $typed = $form['item_prices'][$productId] ?? null;
+                    $price = ($typed === null || trim((string) $typed) === '')
+                        ? (float) $selectedProduct['rental_price']
+                        : (float) $typed;
+                } else {
+                    $price = (float) $selectedProduct['rental_price'];
+                }
+                if ($price < 0) {
+                    $errors[] = 'El precio de ' . $selectedProduct['name'] . ' no puede ser negativo.';
+                    $price = 0.0;
+                }
+                $itemPrices[$productId] = round($price, 2);
             }
+            $form['item_prices']  = $itemPrices;
+            $form['rental_price'] = round(array_sum($itemPrices), 2);
         }
     }
 
@@ -163,12 +186,28 @@ if (is_post()) {
         }
     }
 
+    // --- Cálculo de importes: descuento en % y abono inicial escrito a mano ---
+    $discountAmount = round($form['rental_price'] * ($form['discount_percent'] / 100), 2);
+    $total = round($form['rental_price'] - $discountAmount, 2);
+    if ($total < 0) $total = 0.0;
+
+    // Abono inicial: lo que escriba el usuario; si lo deja vacío, el % por defecto.
+    $calc = calculateRentalPayments($total);
+    if ($form['initial_payment'] === '') {
+        $initialPayment = $calc['initial'];
+    } else {
+        $initialPayment = round((float) $form['initial_payment'], 2);
+        if ($initialPayment < 0) {
+            $errors[] = 'El abono inicial no puede ser negativo.';
+            $initialPayment = 0.0;
+        } elseif ($initialPayment > $total) {
+            $errors[] = 'El abono inicial no puede ser mayor que el total (' . money($total) . ').';
+            $initialPayment = $total;
+        }
+    }
+
     // --- Si todo está bien, persistir ---
     if (!$errors && !$conflict) {
-        $total = round($form['rental_price'] - $form['discount'] + $form['late_penalty'], 2);
-        if ($total < 0) $total = 0.0;
-        $calc = calculateRentalPayments($total);
-
         $pdo = db();
         try {
             $pdo->beginTransaction();
@@ -182,26 +221,39 @@ if (is_post()) {
                 'request_id'               => $requestId > 0 ? $requestId : null,
                 'event_date'               => $form['event_date'] !== '' ? $form['event_date'] : null,
                 'delivery_date'            => $form['delivery_date'],
+                'delivery_time'            => $form['delivery_time'] !== '' ? $form['delivery_time'] : null,
                 'return_date'              => $form['return_date'],
                 'rental_price'             => $form['rental_price'],
-                'discount'                 => $form['discount'],
-                'late_penalty'             => $form['late_penalty'],
+                'discount'                 => $discountAmount,
+                'discount_percent'         => $form['discount_percent'],
+                // La mora se calcula sola al vencer la devolución (monto fijo por día laborable).
+                'late_penalty'             => 0,
                 'total_amount'             => $total,
-                'initial_payment_required' => $calc['initial'],
+                'initial_payment_required' => $initialPayment,
                 'initial_payment_paid'     => 0,
                 'remaining_balance'        => $total,
                 'payment_status'           => 'pending',
-                'rental_status'            => $form['rental_status'],
+                // Un alquiler se registra ya confirmado: no se aparta nada sin abono.
+                'rental_status'            => 'confirmed',
                 'created_by'               => $user['id'],
             ]);
 
             $productNames = [];
+            $alterationCount = 0;
             foreach ($selectedProducts as $position => $selectedProduct) {
+                $productId = (int) $selectedProduct['id'];
+                // Pieza marcada para MODIFICAR (ruedo, cintura…) + nota de taller
+                $needsAlteration = !empty($form['alterations'][$productId]);
+                $alterationNote  = trim((string) ($form['alteration_notes'][$productId] ?? ''));
+                if ($needsAlteration) $alterationCount++;
+
                 db_insert('rental_items', [
-                    'rental_id'  => $rentalId,
-                    'product_id' => (int) $selectedProduct['id'],
-                    'unit_price' => (float) $selectedProduct['rental_price'],
-                    'sort_order' => $position,
+                    'rental_id'        => $rentalId,
+                    'product_id'       => $productId,
+                    'unit_price'       => $form['item_prices'][$productId] ?? (float) $selectedProduct['rental_price'],
+                    'needs_alteration' => $needsAlteration ? 1 : 0,
+                    'alteration_notes' => ($needsAlteration && $alterationNote !== '') ? $alterationNote : null,
+                    'sort_order'       => $position,
                 ]);
                 $productNames[] = $selectedProduct['name'];
             }
@@ -217,7 +269,7 @@ if (is_post()) {
                 'invoice_type'   => 'rental',
                 'concept'        => 'Alquiler ' . $rentalNumber . ' · ' . count($productNames) . (count($productNames) === 1 ? ' producto' : ' productos'),
                 'subtotal'       => $form['rental_price'],
-                'discount'       => $form['discount'],
+                'discount'       => $discountAmount,
                 'tax'            => 0,
                 'total'          => $total,
                 'paid_amount'    => 0,
@@ -240,7 +292,10 @@ if (is_post()) {
         log_activity('rental.create', 'rental', $rentalId,
             'Alquiler ' . $rentalNumber . ' creado con ' . count($selectedProducts) . ' producto(s) por ' . $total);
 
-        flash('success', 'Alquiler ' . $rentalNumber . ' creado correctamente con ' . count($selectedProducts) . ' producto(s).');
+        flash('success', 'Alquiler ' . $rentalNumber . ' creado correctamente con ' . count($selectedProducts) . ' producto(s).'
+            . ($alterationCount > 0
+                ? ' ' . $alterationCount . ' pieza(s) quedaron pendientes de modificar en el tablero.'
+                : ''));
         redirect(admin_url('alquileres/ver.php?id=' . $rentalId));
     }
     // Si hubo errores o conflicto, se re-pinta el formulario más abajo con $errors / $conflict.
@@ -341,7 +396,7 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
                         <option value="">— Seleccione —</option>
                         <?php foreach ($products as $p): ?>
                             <option value="<?= (int) $p['id'] ?>">
-                                <?= e($p['name']) ?><?= $p['sku'] ? ' · ' . e($p['sku']) : '' ?> · <?= e(money($p['rental_price'])) ?>
+                                <?= e($p['name']) ?><?= $p['sku'] ? ' · ' . e($p['sku']) : '' ?> · <?= e(money($p['rental_price'])) ?><?= !empty($p['is_complement']) ? ' · Complemento' : '' ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
@@ -363,7 +418,7 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
         <!-- Fechas -->
         <div class="rounded-2xl border border-gray-100 bg-white p-6 shadow-soft">
             <h2 class="font-serif text-lg font-bold text-gray-900">Fechas del alquiler</h2>
-            <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <div>
                     <label class="lcn-label" for="event_date">Fecha del evento</label>
                     <input type="date" id="event_date" name="event_date" value="<?= e($form['event_date']) ?>" class="lcn-input">
@@ -371,6 +426,10 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
                 <div>
                     <label class="lcn-label" for="delivery_date">Entrega</label>
                     <input type="date" id="delivery_date" name="delivery_date" value="<?= e($form['delivery_date']) ?>" class="lcn-input" required>
+                </div>
+                <div>
+                    <label class="lcn-label" for="delivery_time">Hora de entrega</label>
+                    <input type="time" id="delivery_time" name="delivery_time" value="<?= e($form['delivery_time']) ?>" class="lcn-input">
                 </div>
                 <div>
                     <label class="lcn-label" for="return_date">Devolución</label>
@@ -401,14 +460,23 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
                            value="<?= e((string) $form['rental_price']) ?>" class="lcn-input bg-gray-50" readonly required>
                 </div>
                 <div>
-                    <label class="lcn-label" for="discount">Descuento</label>
-                    <input type="number" step="0.01" min="0" id="discount" name="discount"
-                           value="<?= e((string) $form['discount']) ?>" class="lcn-input">
+                    <label class="lcn-label" for="discount_percent">Descuento (%)</label>
+                    <div class="relative">
+                        <input type="number" step="0.01" min="0" max="100" id="discount_percent" name="discount_percent"
+                               value="<?= e((string) $form['discount_percent']) ?>" class="lcn-input pr-9">
+                        <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-gray-400">%</span>
+                    </div>
+                    <p class="mt-1 text-xs text-gray-400">Equivale a <span id="discountAmount" class="font-medium text-gray-600"><?= e(money(0)) ?></span></p>
                 </div>
                 <div>
-                    <label class="lcn-label" for="late_penalty">Penalidad por mora</label>
-                    <input type="number" step="0.01" min="0" id="late_penalty" name="late_penalty"
-                           value="<?= e((string) $form['late_penalty']) ?>" class="lcn-input">
+                    <label class="lcn-label">Penalidad por mora</label>
+                    <div class="rounded-xl border border-dashed border-gray-200 bg-gray-50/60 px-3 py-2.5 text-sm text-gray-600">
+                        <?= e(money(late_fee_per_day())) ?> por día
+                    </div>
+                    <p class="mt-1 text-xs text-gray-400">
+                        Se aplica sola por cada día <?= late_fee_counts_saturday() ? 'laborable (lun–sáb)' : 'laborable (lun–vie)' ?>
+                        de atraso en la devolución.
+                    </p>
                 </div>
             </div>
         </div>
@@ -418,39 +486,33 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
     <div class="space-y-6">
         <div class="rounded-2xl border border-gray-100 bg-white p-6 shadow-soft">
             <h2 class="font-serif text-lg font-bold text-gray-900">Resumen de pago</h2>
-            <p class="mt-1 text-xs text-gray-400">El total se calcula en vivo y el abono inicial es del <?= e((string) setting('initial_payment_percentage', 50)) ?>%.</p>
+            <p class="mt-1 text-xs text-gray-400">
+                El total se calcula en vivo. El abono sugerido es del <?= e((string) setting('initial_payment_percentage', 50)) ?>%,
+                pero puede escribir el monto exacto que reciba.
+            </p>
 
             <div class="mt-4 space-y-4">
                 <div>
                     <label class="lcn-label" for="totalCalc">Total estimado</label>
-                    <!-- input gobernado por JS data-payment-total (lo recalculamos abajo) -->
-                    <input type="text" id="totalCalc" class="lcn-input bg-gray-50 font-semibold" readonly
-                           data-payment-total data-payment-percentage="<?= e((string) setting('initial_payment_percentage', 50)) ?>"
-                           data-payment-initial="#calcInitial" data-payment-remaining="#calcRemaining"
-                           value="0.00">
+                    <input type="text" id="totalCalc" class="lcn-input bg-gray-50 font-semibold" readonly value="0.00">
                 </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="lcn-label" for="calcInitial">Abono inicial</label>
-                        <input type="text" id="calcInitial" class="lcn-input bg-gray-50" readonly value="0.00">
-                    </div>
-                    <div>
-                        <label class="lcn-label" for="calcRemaining">Saldo restante</label>
-                        <input type="text" id="calcRemaining" class="lcn-input bg-gray-50" readonly value="0.00">
+                <div>
+                    <label class="lcn-label" for="initial_payment">Abono inicial recibido</label>
+                    <input type="number" step="0.01" min="0" id="initial_payment" name="initial_payment"
+                           value="<?= e((string) $form['initial_payment']) ?>" class="lcn-input font-semibold"
+                           placeholder="0.00">
+                    <div class="mt-2 flex items-center justify-between gap-2">
+                        <button type="button" id="fillSuggested"
+                                class="text-xs font-medium text-brand-red hover:underline">
+                            Usar el <?= e((string) setting('initial_payment_percentage', 50)) ?>% sugerido
+                        </button>
+                        <span id="initialHint" class="text-xs text-gray-400"></span>
                     </div>
                 </div>
-            </div>
-        </div>
-
-        <div class="rounded-2xl border border-gray-100 bg-white p-6 shadow-soft">
-            <h2 class="font-serif text-lg font-bold text-gray-900">Estado inicial</h2>
-            <div class="mt-4">
-                <label class="lcn-label" for="rental_status">Estado del alquiler</label>
-                <select id="rental_status" name="rental_status" class="lcn-input">
-                    <option value="reserved"  <?= $form['rental_status'] === 'reserved' ? 'selected' : '' ?>>Reservado</option>
-                    <option value="confirmed" <?= $form['rental_status'] === 'confirmed' ? 'selected' : '' ?>>Confirmado</option>
-                </select>
-                <p class="mt-1.5 text-xs text-gray-400">Ambos estados reservan el producto y bloquean la disponibilidad.</p>
+                <div>
+                    <label class="lcn-label" for="calcRemaining">Saldo restante</label>
+                    <input type="text" id="calcRemaining" class="lcn-input bg-gray-50" readonly value="0.00">
+                </div>
             </div>
         </div>
 
@@ -469,6 +531,9 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
 (function () {
     var catalog = <?= json_encode($products, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
     var initialIds = <?= json_encode(array_map('intval', (array) ($form['product_ids'] ?? []))) ?>;
+    var initialPrices = <?= json_encode((object) array_map('floatval', (array) ($form['item_prices'] ?? []))) ?>;
+    var initialAlterations = <?= json_encode((object) array_map('intval', (array) ($form['alterations'] ?? []))) ?>;
+    var initialAlterNotes  = <?= json_encode((object) array_map('strval', (array) ($form['alteration_notes'] ?? [])), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
     var currency = <?= json_encode((string) setting('currency', 'RD$'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
     var byId = {};
     var byCode = {};
@@ -491,12 +556,25 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
     var hidden = document.getElementById('productHiddenInputs');
     var count = document.getElementById('productCount');
     var price  = document.getElementById('rental_price');
-    var disc   = document.getElementById('discount');
-    var pen    = document.getElementById('late_penalty');
+    var discPct = document.getElementById('discount_percent');
+    var discAmountBox = document.getElementById('discountAmount');
     var total  = document.getElementById('totalCalc');
+    var initial = document.getElementById('initial_payment');
+    var initialHint = document.getElementById('initialHint');
+    var remaining = document.getElementById('calcRemaining');
+    var suggestedPct = <?= json_encode((float) setting('initial_payment_percentage', 50)) ?>;
+    var initialTouched = initial.value !== '';
     var form = scanner.closest('form');
 
+    var SCISSORS = <?= json_encode(icon('scissors', 'w-3.5 h-3.5'), JSON_UNESCAPED_SLASHES) ?>;
+
     function num(v) { var n = parseFloat(v); return isNaN(n) ? 0 : n; }
+    function isComplement(product) { return String(product.is_complement) === '1'; }
+    function alterClass(on) {
+        return 'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition '
+            + (on ? 'bg-brand-gold text-white hover:bg-amber-600'
+                  : 'border border-gray-200 bg-white text-gray-600 hover:border-brand-gold hover:text-brand-gold');
+    }
     function normalizeCode(value) { return String(value).trim().replace(/\s+/g, '').toUpperCase(); }
     function money(value) { return currency + ' ' + num(value).toLocaleString('es-DO', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
     function setFeedback(message, kind) {
@@ -505,12 +583,31 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
     }
 
     function recalcTotal() {
-        var subtotal = selected.reduce(function (sum, product) { return sum + num(product.rental_price); }, 0);
+        var subtotal = selected.reduce(function (product_sum, product) { return product_sum + num(product.price); }, 0);
         price.value = subtotal.toFixed(2);
-        var t = num(price.value) - num(disc.value) + num(pen.value);
+
+        var pct = Math.min(100, Math.max(0, num(discPct.value)));
+        var discountAmount = Math.round(subtotal * pct) / 100;
+        discAmountBox.textContent = money(discountAmount);
+
+        var t = subtotal - discountAmount;
         if (t < 0) t = 0;
         total.value = t.toFixed(2);
-        total.dispatchEvent(new Event('input'));
+
+        // Abono sugerido mientras el usuario no escriba uno propio
+        if (!initialTouched) {
+            initial.value = (Math.round(t * suggestedPct) / 100).toFixed(2);
+        }
+        var abono = Math.min(Math.max(0, num(initial.value)), t);
+        remaining.value = (t - abono).toFixed(2);
+
+        if (num(initial.value) > t) {
+            initialHint.textContent = 'El abono no puede superar el total.';
+            initialHint.className = 'text-xs text-rose-600';
+        } else {
+            initialHint.textContent = t > 0 ? 'Equivale al ' + Math.round(abono / t * 100) + '% del total' : '';
+            initialHint.className = 'text-xs text-gray-400';
+        }
     }
 
     function render() {
@@ -535,6 +632,12 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
             var title = document.createElement('p');
             title.className = 'truncate font-semibold text-gray-900';
             title.textContent = product.name;
+            if (isComplement(product)) {
+                var tag = document.createElement('span');
+                tag.className = 'ml-2 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 align-middle text-[10px] font-semibold text-amber-700';
+                tag.textContent = 'Complemento';
+                title.appendChild(tag);
+            }
             var meta = document.createElement('p');
             meta.className = 'mt-0.5 text-xs text-gray-500';
             meta.textContent = [product.category_name, product.size ? 'Talla ' + product.size : '', product.color].filter(Boolean).join(' · ') || 'Sin detalles adicionales';
@@ -561,12 +664,79 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
             var code = document.createElement('span');
             code.className = 'rounded-lg bg-white px-2 py-1 font-mono text-[11px] tracking-wider text-gray-500 ring-1 ring-gray-100';
             code.textContent = product.barcode || product.sku || 'Sin código';
-            var itemPrice = document.createElement('span');
-            itemPrice.className = 'text-sm font-semibold text-brand-red';
-            itemPrice.textContent = money(product.rental_price);
             bottom.appendChild(code);
-            bottom.appendChild(itemPrice);
+
+            if (isComplement(product)) {
+                // Los complementos se cobran al precio que se defina en la factura.
+                var priceBox = document.createElement('label');
+                priceBox.className = 'flex items-center gap-2';
+                var priceLabel = document.createElement('span');
+                priceLabel.className = 'text-xs text-gray-500';
+                priceLabel.textContent = currency;
+                var priceInput = document.createElement('input');
+                priceInput.type = 'number';
+                priceInput.step = '0.01';
+                priceInput.min = '0';
+                priceInput.name = 'item_prices[' + product.id + ']';
+                priceInput.value = num(product.price).toFixed(2);
+                priceInput.className = 'w-28 rounded-lg border border-gray-200 bg-white px-2 py-1 text-right text-sm font-semibold text-brand-red focus:border-brand-red focus:outline-none focus:ring-1 focus:ring-brand-red';
+                priceInput.setAttribute('aria-label', 'Precio de ' + product.name);
+                priceInput.addEventListener('input', function () {
+                    product.price = num(priceInput.value);
+                    recalcTotal();
+                });
+                priceBox.appendChild(priceLabel);
+                priceBox.appendChild(priceInput);
+                bottom.appendChild(priceBox);
+            } else {
+                var itemPrice = document.createElement('span');
+                itemPrice.className = 'text-sm font-semibold text-brand-red';
+                itemPrice.textContent = money(product.price);
+                bottom.appendChild(itemPrice);
+            }
+
             body.appendChild(bottom);
+
+            /* ---- Marcar la pieza para MODIFICAR (ruedo, cintura…) ---- */
+            var alterRow = document.createElement('div');
+            alterRow.className = 'mt-3 border-t border-gray-100 pt-2.5';
+
+            var alterButton = document.createElement('button');
+            alterButton.type = 'button';
+            alterButton.className = alterClass(product.alter);
+            alterButton.innerHTML = SCISSORS + '<span>' + (product.alter ? 'Se modificará' : 'Modificar') + '</span>';
+
+            var noteWrap = document.createElement('div');
+            noteWrap.className = 'mt-2' + (product.alter ? '' : ' hidden');
+            var note = document.createElement('textarea');
+            note.name = 'alteration_notes[' + product.id + ']';
+            note.rows = 2;
+            note.placeholder = '¿Qué hay que modificarle? Ej.: reducir el ruedo 5 cm, coger de la cintura…';
+            note.value = product.alterNote || '';
+            note.className = 'w-full rounded-lg border border-amber-200 bg-amber-50/50 px-3 py-2 text-xs text-gray-700 placeholder:text-gray-400 focus:border-brand-gold focus:outline-none focus:ring-1 focus:ring-brand-gold';
+            note.addEventListener('input', function () { product.alterNote = note.value; });
+            noteWrap.appendChild(note);
+
+            var alterFlag = document.createElement('input');
+            alterFlag.type = 'hidden';
+            alterFlag.name = 'alterations[' + product.id + ']';
+            alterFlag.value = '1';
+            alterFlag.disabled = !product.alter;
+            noteWrap.appendChild(alterFlag);
+
+            alterButton.addEventListener('click', function () {
+                product.alter = !product.alter;
+                alterButton.className = alterClass(product.alter);
+                alterButton.innerHTML = SCISSORS + '<span>' + (product.alter ? 'Se modificará' : 'Modificar') + '</span>';
+                noteWrap.classList.toggle('hidden', !product.alter);
+                alterFlag.disabled = !product.alter;
+                if (product.alter) note.focus();
+            });
+
+            alterRow.appendChild(alterButton);
+            alterRow.appendChild(noteWrap);
+            body.appendChild(alterRow);
+
             card.appendChild(body);
             list.appendChild(card);
 
@@ -594,7 +764,14 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
             scanner.focus();
             return;
         }
-        selected.push(product);
+        // Copia propia de la línea: el precio de los complementos se edita aquí.
+        var line = Object.assign({}, product);
+        line.price = initialPrices[product.id] !== undefined
+            ? num(initialPrices[product.id])
+            : num(product.rental_price);
+        line.alter     = !!initialAlterations[product.id];
+        line.alterNote = initialAlterNotes[product.id] || '';
+        selected.push(line);
         render();
         setFeedback('Agregado: ' + product.name + '. Listo para escanear la siguiente pieza.', 'ok');
         scanner.value = '';
@@ -673,12 +850,27 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
         });
     });
 
-    [disc, pen].forEach(function (el) { el.addEventListener('input', recalcTotal); });
+    discPct.addEventListener('input', recalcTotal);
+    initial.addEventListener('input', function () {
+        initialTouched = true;
+        recalcTotal();
+    });
+    document.getElementById('fillSuggested').addEventListener('click', function () {
+        initialTouched = false;
+        recalcTotal();
+        initialTouched = initial.value !== '';
+    });
+
     form.addEventListener('submit', function (event) {
         if (!selected.length) {
             event.preventDefault();
             setFeedback('Debe agregar al menos un producto antes de crear el alquiler.', 'error');
             scanner.focus();
+            return;
+        }
+        if (num(initial.value) > num(total.value) + 0.009) {
+            event.preventDefault();
+            initial.focus();
         }
     });
 

@@ -87,13 +87,41 @@ $docTitle = 'Factura ' . ($invoice['invoice_number'] ?? '') . ' · ' . $bizName;
     <title><?= e($docTitle) ?></title>
     <?php require LCN_ROOT . '/app/views/layouts/_head_assets.php'; ?>
     <style>
-        /* Estilos específicos de impresión: papel A4, sin elementos de pantalla */
-        @page { size: A4; margin: 14mm; }
+        /* Estilos específicos de impresión: papel A4, UNA sola hoja */
+        @page { size: A4; margin: 12mm; }
         body  { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         @media print {
             .no-print { display: none !important; }
-            .print-area { box-shadow: none !important; border: 0 !important; margin: 0 !important; max-width: 100% !important; }
-            html, body { background: #fff !important; }
+            html, body {
+                background: #fff !important;
+                height: auto !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+            /* Sin márgenes ni sombras: todo el documento cabe en la primera hoja */
+            main {
+                margin: 0 !important;
+                padding: 0 !important;
+                max-width: 100% !important;
+                width: 100% !important;
+            }
+            .print-area {
+                box-shadow: none !important;
+                border: 0 !important;
+                border-radius: 0 !important;
+                margin: 0 !important;
+                max-width: 100% !important;
+                overflow: visible !important;
+            }
+            /* Compactar el relleno para no desbordar a una segunda hoja */
+            .print-pad     { padding: 14px 0 !important; }
+            .print-head    { padding: 0 0 12px !important; }
+            .print-foot    { padding: 10px 0 0 !important; background: transparent !important; }
+            .print-area *  { box-shadow: none !important; }
+            table          { page-break-inside: auto; }
+            tr, .avoid-break { page-break-inside: avoid; }
+            /* Evita que un elemento vacío final genere una hoja en blanco */
+            .print-area > *:last-child { margin-bottom: 0 !important; }
         }
     </style>
 </head>
@@ -127,7 +155,7 @@ $docTitle = 'Factura ' . ($invoice['invoice_number'] ?? '') . ' · ' . $bizName;
     <article class="print-area overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-card">
 
         <!-- Encabezado de marca -->
-        <header class="flex flex-col gap-4 border-b border-gray-100 bg-gradient-to-br from-brand-cream to-white px-8 py-7 sm:flex-row sm:items-start sm:justify-between">
+        <header class="print-head flex flex-col gap-4 border-b border-gray-100 bg-gradient-to-br from-brand-cream to-white px-8 py-7 sm:flex-row sm:items-start sm:justify-between">
             <div>
                 <?= brand_lockup('dark', 'md') ?>
                 <div class="mt-3 space-y-0.5 text-xs text-gray-500">
@@ -144,21 +172,40 @@ $docTitle = 'Factura ' . ($invoice['invoice_number'] ?? '') . ' · ' . $bizName;
             </div>
         </header>
 
-        <div class="px-8 py-7">
+        <div class="print-pad px-8 py-7">
             <!-- Cliente y detalles -->
             <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
                 <div>
                     <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Facturar a</p>
-                    <p class="mt-1.5 font-semibold text-gray-900"><?= e($custName) ?></p>
-                    <div class="mt-1 space-y-0.5 text-sm text-gray-500">
-                        <?php $custDoc = $customer['document_number'] ?? $invoice['customer_document'] ?? ''; ?>
-                        <?php if ($custDoc): ?><p>Documento: <?= e($custDoc) ?></p><?php endif; ?>
-                        <?php if ($custPhone): ?><p><?= e($custPhone) ?></p><?php endif; ?>
-                        <?php $custEmail = $customer['email'] ?? $invoice['customer_email'] ?? ''; ?>
-                        <?php if ($custEmail): ?><p><?= e($custEmail) ?></p><?php endif; ?>
-                        <?php $custAddr = $customer['address'] ?? $invoice['customer_address'] ?? ''; ?>
-                        <?php if ($custAddr): ?><p><?= e($custAddr) ?></p><?php endif; ?>
-                    </div>
+                    <?php
+                    $custDoc   = $customer['document_number'] ?? $invoice['customer_document'] ?? '';
+                    $custEmail = $customer['email']           ?? $invoice['customer_email']    ?? '';
+                    $custAddr  = $customer['address']         ?? $invoice['customer_address']  ?? '';
+                    ?>
+                    <dl class="mt-1.5 space-y-0.5 text-sm text-gray-700">
+                        <div class="flex gap-1.5">
+                            <dt class="font-semibold text-gray-500">Cliente:</dt>
+                            <dd class="font-semibold text-gray-900"><?= e($custName) ?></dd>
+                        </div>
+                        <div class="flex gap-1.5">
+                            <dt class="font-semibold text-gray-500">Cédula:</dt>
+                            <dd><?= e($custDoc !== '' ? $custDoc : '—') ?></dd>
+                        </div>
+                        <div class="flex gap-1.5">
+                            <dt class="font-semibold text-gray-500">Teléfono:</dt>
+                            <dd><?= e($custPhone !== '' ? $custPhone : '—') ?></dd>
+                        </div>
+                        <div class="flex gap-1.5">
+                            <dt class="font-semibold text-gray-500">Dirección:</dt>
+                            <dd><?= e($custAddr !== '' ? $custAddr : '—') ?></dd>
+                        </div>
+                        <?php if ($custEmail): ?>
+                            <div class="flex gap-1.5">
+                                <dt class="font-semibold text-gray-500">Correo:</dt>
+                                <dd><?= e($custEmail) ?></dd>
+                            </div>
+                        <?php endif; ?>
+                    </dl>
                 </div>
                 <div class="sm:text-right">
                     <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Detalles</p>
@@ -167,7 +214,7 @@ $docTitle = 'Factura ' . ($invoice['invoice_number'] ?? '') . ' · ' . $bizName;
                         <?php if (!empty($invoice['rental_number'])): ?>
                             <p>Alquiler: <span class="font-medium text-gray-900"><?= e($invoice['rental_number']) ?></span></p>
                             <?php if (!empty($invoice['delivery_date'])): ?>
-                                <p>Entrega: <?= e(format_date($invoice['delivery_date'])) ?></p>
+                                <p>Entrega: <?= e(format_date_time($invoice['delivery_date'], $invoice['delivery_time'] ?? null)) ?></p>
                                 <p>Devolución: <?= e(format_date($invoice['return_date'] ?? null)) ?></p>
                             <?php endif; ?>
                         <?php endif; ?>
@@ -181,25 +228,24 @@ $docTitle = 'Factura ' . ($invoice['invoice_number'] ?? '') . ' · ' . $bizName;
                 </div>
             </div>
 
-            <!-- Tabla de conceptos -->
-            <div class="mt-7 overflow-hidden rounded-xl border border-gray-200">
+            <!-- Tabla de conceptos (compacta: una línea por artículo, ~15 por hoja) -->
+            <div class="mt-5 overflow-hidden rounded-xl border border-gray-200">
                 <table class="min-w-full divide-y divide-gray-100 text-sm">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Concepto</th>
-                            <th class="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">Importe</th>
+                            <th class="w-8 px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-gray-500">#</th>
+                            <th class="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-gray-500">Concepto</th>
+                            <th class="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-gray-500">Detalle</th>
+                            <th class="px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-wide text-gray-500">Importe</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-50">
-                        <?php foreach ($lines as $ln): ?>
-                            <tr>
-                                <td class="px-5 py-4 text-gray-700">
-                                    <p class="font-medium text-gray-900"><?= e($ln['concept'] ?? 'Servicio') ?></p>
-                                    <?php if (!empty($ln['detail'])): ?>
-                                        <p class="mt-0.5 text-xs text-gray-400"><?= e($ln['detail']) ?></p>
-                                    <?php endif; ?>
-                                </td>
-                                <td class="px-5 py-4 text-right font-medium text-gray-900"><?= e(money($ln['amount'] ?? 0)) ?></td>
+                        <?php foreach ($lines as $i => $ln): ?>
+                            <tr class="avoid-break">
+                                <td class="px-3 py-1.5 text-xs text-gray-400"><?= (int) $i + 1 ?></td>
+                                <td class="px-3 py-1.5 font-medium text-gray-900"><?= e($ln['concept'] ?? 'Servicio') ?></td>
+                                <td class="px-3 py-1.5 text-xs text-gray-500"><?= e($ln['detail'] ?? '') ?></td>
+                                <td class="whitespace-nowrap px-3 py-1.5 text-right font-medium text-gray-900"><?= e(money($ln['amount'] ?? 0)) ?></td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
@@ -207,7 +253,7 @@ $docTitle = 'Factura ' . ($invoice['invoice_number'] ?? '') . ' · ' . $bizName;
             </div>
 
             <!-- Totales -->
-            <div class="mt-6 flex justify-end">
+            <div class="avoid-break mt-4 flex justify-end">
                 <div class="w-full max-w-xs space-y-2 text-sm">
                     <div class="flex justify-between"><span class="text-gray-500">Subtotal</span><span class="font-medium text-gray-800"><?= e(money($subtotal)) ?></span></div>
                     <?php if ($discount > 0): ?>
@@ -224,25 +270,25 @@ $docTitle = 'Factura ' . ($invoice['invoice_number'] ?? '') . ' · ' . $bizName;
 
             <!-- Historial de pagos -->
             <?php if (!empty($payments)): ?>
-                <div class="mt-8">
+                <div class="avoid-break mt-5">
                     <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Pagos recibidos</p>
                     <div class="mt-2 overflow-hidden rounded-xl border border-gray-200">
                         <table class="min-w-full divide-y divide-gray-100 text-sm">
                             <thead class="bg-gray-50">
                                 <tr>
-                                    <th class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Recibo</th>
-                                    <th class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Fecha</th>
-                                    <th class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Método</th>
-                                    <th class="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">Monto</th>
+                                    <th class="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-gray-500">Recibo</th>
+                                    <th class="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-gray-500">Fecha</th>
+                                    <th class="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-gray-500">Método</th>
+                                    <th class="px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-wide text-gray-500">Monto</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-gray-50">
                                 <?php foreach ($payments as $p): ?>
                                     <tr>
-                                        <td class="px-4 py-3 font-medium text-gray-900"><?= e($p['payment_number'] ?? '—') ?></td>
-                                        <td class="px-4 py-3 text-gray-700"><?= e(format_date($p['paid_at'] ?? $p['created_at'] ?? null)) ?></td>
-                                        <td class="px-4 py-3 text-gray-700"><?= e($methodLabels[$p['payment_method'] ?? ''] ?? ucfirst((string) ($p['payment_method'] ?? '—'))) ?></td>
-                                        <td class="px-4 py-3 text-right font-medium text-emerald-600"><?= e(money($p['amount'] ?? 0)) ?></td>
+                                        <td class="px-3 py-1.5 font-medium text-gray-900"><?= e($p['payment_number'] ?? '—') ?></td>
+                                        <td class="px-3 py-1.5 text-gray-700"><?= e(format_date($p['paid_at'] ?? $p['created_at'] ?? null)) ?></td>
+                                        <td class="px-3 py-1.5 text-gray-700"><?= e($methodLabels[$p['payment_method'] ?? ''] ?? ucfirst((string) ($p['payment_method'] ?? '—'))) ?></td>
+                                        <td class="whitespace-nowrap px-3 py-1.5 text-right font-medium text-emerald-600"><?= e(money($p['amount'] ?? 0)) ?></td>
                                     </tr>
                                 <?php endforeach; ?>
                             </tbody>
@@ -253,7 +299,7 @@ $docTitle = 'Factura ' . ($invoice['invoice_number'] ?? '') . ' · ' . $bizName;
         </div>
 
         <!-- Pie de página -->
-        <footer class="border-t border-gray-100 bg-gray-50/60 px-8 py-6 text-center">
+        <footer class="print-foot avoid-break border-t border-gray-100 bg-gray-50/60 px-8 py-6 text-center">
             <p class="font-script text-2xl text-brand-red">Gracias por su preferencia</p>
             <p class="mt-1 text-xs text-gray-400">
                 <?= e($bizName) ?><?php if ($bizPhone): ?> · <?= e($bizPhone) ?><?php endif; ?><?php if ($bizWhats): ?> · WhatsApp <?= e($bizWhats) ?><?php endif; ?>

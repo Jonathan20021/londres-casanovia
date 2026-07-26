@@ -230,7 +230,12 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
                                     </div>
                                 </td>
                                 <td class="px-5 py-4 text-gray-700"><?= format_date($r['event_date']) ?></td>
-                                <td class="px-5 py-4 text-gray-700"><?= format_date($r['delivery_date']) ?></td>
+                                <td class="px-5 py-4 text-gray-700">
+                                    <?= format_date($r['delivery_date']) ?>
+                                    <?php if (format_time($r['delivery_time']) !== ''): ?>
+                                        <span class="block text-xs font-medium text-brand-red"><?= e(format_time($r['delivery_time'])) ?></span>
+                                    <?php endif; ?>
+                                </td>
                                 <td class="px-5 py-4 text-gray-700">
                                     <span class="<?= $overdue ? 'font-semibold text-rose-600' : '' ?>"><?= format_date($r['return_date']) ?></span>
                                     <?php if ($overdue): ?><span class="ml-1 text-xs text-rose-500">(vencido)</span><?php endif; ?>

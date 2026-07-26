@@ -16,6 +16,7 @@ $form = [
     'sku'               => '',
     'category_id'       => '',
     'type'              => 'rental',
+    'is_complement'     => '0',
     'rental_price'      => '',
     'sale_price'        => '',
     'cost_price'        => '',
@@ -41,7 +42,7 @@ if (is_post()) {
 
     /* Recoger campos */
     foreach ($form as $k => $_) {
-        if (in_array($k, ['is_unique', 'featured'], true)) {
+        if (in_array($k, ['is_unique', 'featured', 'is_complement'], true)) {
             $form[$k] = post($k) ? '1' : '0';
         } else {
             $form[$k] = trim((string) post($k, ''));
@@ -101,6 +102,7 @@ if (is_post()) {
                 'slug'              => unique_slug('products', $form['name']),
                 'sku'               => $form['sku'] !== '' ? $form['sku'] : null,
                 'type'              => $form['type'],
+                'is_complement'     => $form['is_complement'] === '1' ? 1 : 0,
                 'description'       => $form['description'] !== '' ? $form['description'] : null,
                 'internal_notes'    => $form['internal_notes'] !== '' ? $form['internal_notes'] : null,
                 'rental_price'      => (float) ($form['rental_price'] !== '' ? $form['rental_price'] : 0),
@@ -297,6 +299,19 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
                         <option value="sale"   <?= $form['type'] === 'sale'   ? 'selected' : '' ?>>Venta</option>
                         <option value="both"   <?= $form['type'] === 'both'   ? 'selected' : '' ?>>Alquiler y venta</option>
                     </select>
+                </div>
+
+                <div class="sm:col-span-2">
+                    <div class="flex items-center justify-between gap-4 rounded-xl border border-brand-gold/30 bg-amber-50/50 px-4 py-3">
+                        <div>
+                            <p class="text-sm font-medium text-gray-800">Es un complemento</p>
+                            <p class="text-xs text-gray-500">Corbata, corona, velo, ramo… Puede tener precio 0 y su precio se ajusta al facturar.</p>
+                        </div>
+                        <label class="relative inline-flex cursor-pointer items-center">
+                            <input type="checkbox" name="is_complement" value="1" class="peer sr-only" <?= $form['is_complement'] === '1' ? 'checked' : '' ?>>
+                            <span class="h-6 w-11 rounded-full bg-gray-200 transition peer-checked:bg-brand-gold after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow after:transition peer-checked:after:translate-x-5"></span>
+                        </label>
+                    </div>
                 </div>
 
                 <div>

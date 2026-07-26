@@ -85,6 +85,9 @@ $conditionLabels = ['new'=>'Nuevo','excellent'=>'Excelente','good'=>'Bueno','rep
             — <?= e($contractProduct['category_name'] ?? 'General') ?>
             — Talla/Color: <?= e($contractProduct['size'] ?? '—') ?> · <?= e($contractProduct['color'] ?? '—') ?>
             — <?= e($conditionLabel) ?>
+            <?php if (!empty($contractProduct['needs_alteration'])): ?>
+              <br><span style="color:#A9761A; font-weight:bold">Por modificar<?= !empty($contractProduct['alteration_notes']) ? ': ' . e($contractProduct['alteration_notes']) : '' ?></span>
+            <?php endif; ?>
           </td>
         </tr>
       <?php endforeach; ?>
@@ -94,7 +97,7 @@ $conditionLabels = ['new'=>'Nuevo','excellent'=>'Excelente','good'=>'Bueno','rep
     <h2><span class="n">02.</span> Fechas</h2>
     <table class="kv">
       <tr><td class="k">Evento</td><td><?= e(format_date($rental['event_date'])) ?></td></tr>
-      <tr><td class="k">Entrega</td><td><?= e(format_date($rental['delivery_date'])) ?></td></tr>
+      <tr><td class="k">Entrega</td><td><?= e(format_date_time($rental['delivery_date'], $rental['delivery_time'] ?? null)) ?></td></tr>
       <tr><td class="k">Devolución</td><td><?= e(format_date($rental['return_date'])) ?></td></tr>
     </table>
 
