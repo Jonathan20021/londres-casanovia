@@ -81,7 +81,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['confirm'] ?? '') === 'yes'
             <a href="public/index.php" class="flex-1 rounded-xl border border-gray-200 px-4 py-3 text-center text-sm font-medium text-gray-700 hover:bg-gray-50">Ver sitio público</a>
             <a href="admin/login.php" class="flex-1 rounded-xl bg-[#C8102E] px-4 py-3 text-center text-sm font-semibold text-white hover:bg-red-700">Ir al panel</a>
         </div>
-        <p class="mt-4 text-center text-xs text-gray-400">Acceso demo: admin@londresnovias.com / Admin12345</p>
+        <p class="mt-4 text-center text-xs text-gray-400">
+            Entre al panel con el usuario administrador que creó durante la instalación.
+            Recuerde <strong>borrar este archivo</strong> (<code>install.php</code>) del servidor.
+        </p>
     <?php else: ?>
         <?php if ($errors): ?>
             <div class="mb-5 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">

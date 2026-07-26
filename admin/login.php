@@ -106,16 +106,6 @@ $page_title = 'Iniciar sesión';
                     <?= icon('logout', 'w-5 h-5') ?> Iniciar sesión
                 </button>
             </form>
-
-            <!-- Credenciales demo -->
-            <div class="mt-7 rounded-2xl border border-dashed border-gray-200 bg-gray-50/70 px-4 py-3 text-center">
-                <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Acceso de demostración</p>
-                <p class="mt-1 text-sm text-gray-600">
-                    <span class="font-medium text-gray-900">admin@londresnovias.com</span>
-                    <span class="mx-1.5 text-gray-300">·</span>
-                    <span class="font-medium text-gray-900">Admin12345</span>
-                </p>
-            </div>
         </div>
 
         <p class="mt-6 text-center text-xs text-white/40">
