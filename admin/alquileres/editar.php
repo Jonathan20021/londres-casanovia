@@ -44,6 +44,7 @@ $form = [
     'actual_return_date' => $rental['actual_return_date'] ?? '',
     'rental_price'       => $rental['rental_price'],
     'discount_percent'   => $rental['discount_percent'] ?? 0,
+    'initial_payment'    => $rental['initial_payment_required'],
     'rental_status'      => $rental['rental_status'],
     'authorized_delivery_without_full_payment' => (int) $rental['authorized_delivery_without_full_payment'],
     'authorization_reason' => $rental['authorization_reason'] ?? '',
@@ -60,6 +61,7 @@ if (is_post()) {
         'actual_return_date' => trim((string) post('actual_return_date', '')),
         'rental_price'       => (float) post('rental_price', 0),
         'discount_percent'   => (float) post('discount_percent', 0),
+        'initial_payment'    => trim((string) post('initial_payment', '')),
         'rental_status'      => (string) post('rental_status', $rental['rental_status']),
         'authorized_delivery_without_full_payment' => (int) (post('authorized_delivery_without_full_payment') ? 1 : 0),
         'authorization_reason' => trim((string) post('authorization_reason', '')),
@@ -92,13 +94,30 @@ if (is_post()) {
     // --- Recalcular totales (necesario para la regla de entrega) ---
     // El descuento se guarda como monto, pero se captura en porcentaje.
     $discountAmount = round($form['rental_price'] * ($form['discount_percent'] / 100), 2);
-    // La mora es automática: monto fijo por día laborable de atraso.
-    $latePenalty = rental_late_penalty(
+    // La mora es automática, pero SOLO si la pieza llegó a salir del local:
+    // un alquiler reservado o confirmado no genera penalidad aunque venza.
+    $latePenalty = rental_late_penalty_for(
+        $form['rental_status'],
         $form['return_date'] !== '' ? $form['return_date'] : (string) $rental['return_date'],
         $form['actual_return_date'] !== '' ? $form['actual_return_date'] : null
     );
     $total = round($form['rental_price'] - $discountAmount + $latePenalty, 2);
     if ($total < 0) $total = 0.0;
+
+    // Abono inicial: se respeta el monto acordado; si no se envía, se conserva
+    // el que ya tenía el alquiler (nunca se reemplaza por el % por defecto).
+    if (($form['initial_payment'] ?? '') === '') {
+        $initialPayment = min((float) $rental['initial_payment_required'], $total);
+    } else {
+        $initialPayment = round((float) $form['initial_payment'], 2);
+        if ($initialPayment < 0) {
+            $errors[] = 'El abono inicial no puede ser negativo.';
+            $initialPayment = 0.0;
+        } elseif ($initialPayment > $total) {
+            $errors[] = 'El abono inicial no puede ser mayor que el total (' . money($total) . ').';
+            $initialPayment = $total;
+        }
+    }
     $paid    = rental_paid_amount($id);
     $balance = round($total - $paid, 2);
 
@@ -147,8 +166,6 @@ if (is_post()) {
         elseif ($balance > 0.009)   $paymentStatus = 'partial';
         else                        $paymentStatus = 'paid';
 
-        $calc = calculateRentalPayments($total);
-
         db_update('rentals', [
             'event_date'    => $form['event_date'] !== '' ? $form['event_date'] : null,
             'delivery_date' => $form['delivery_date'],
@@ -160,7 +177,7 @@ if (is_post()) {
             'discount_percent' => $form['discount_percent'],
             'late_penalty'  => $latePenalty,
             'total_amount'  => $total,
-            'initial_payment_required' => $calc['initial'],
+            'initial_payment_required' => $initialPayment,
             'remaining_balance' => max(0, $balance),
             'payment_status'    => $paymentStatus,
             'rental_status'     => $form['rental_status'],
@@ -328,7 +345,10 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
                 <div>
                     <label class="lcn-label">Penalidad por mora</label>
                     <?php
-                    $currentLateDays    = rental_late_days((string) $form['return_date'], $form['actual_return_date'] !== '' ? (string) $form['actual_return_date'] : null);
+                    $aplicaMora         = rental_applies_late_fee($form['rental_status']);
+                    $currentLateDays    = $aplicaMora
+                        ? rental_late_days((string) $form['return_date'], $form['actual_return_date'] !== '' ? (string) $form['actual_return_date'] : null)
+                        : 0;
                     $currentLatePenalty = round($currentLateDays * late_fee_per_day(), 2);
                     ?>
                     <div class="rounded-xl border px-3 py-2.5 text-sm <?= $currentLateDays > 0 ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-dashed border-gray-200 bg-gray-50/60 text-gray-600' ?>">
@@ -336,9 +356,20 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
                         <span class="text-xs"> · <?= (int) $currentLateDays ?> día(s) de atraso</span>
                     </div>
                     <p class="mt-1 text-xs text-gray-400">
-                        Automática: <?= e(money(late_fee_per_day())) ?> por cada día
-                        <?= late_fee_counts_saturday() ? 'de lunes a sábado' : 'de lunes a viernes' ?>.
+                        <?php if ($aplicaMora): ?>
+                            Automática: <?= e(money(late_fee_per_day())) ?> por cada día
+                            <?= late_fee_counts_saturday() ? 'de lunes a sábado' : 'de lunes a viernes' ?>.
+                        <?php else: ?>
+                            No aplica: la pieza aún no ha salido del local.
+                        <?php endif; ?>
                     </p>
+                </div>
+
+                <div>
+                    <label class="lcn-label" for="initial_payment">Abono inicial acordado</label>
+                    <input type="number" step="0.01" min="0" id="initial_payment" name="initial_payment"
+                           value="<?= e((string) $form['initial_payment']) ?>" class="lcn-input">
+                    <p class="mt-1 text-xs text-gray-400">Se conserva el monto pactado; no se recalcula solo.</p>
                 </div>
             </div>
             <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">

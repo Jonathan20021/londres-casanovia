@@ -52,9 +52,11 @@ $payments = db_all(
 );
 
 $today     = date('Y-m-d');
-$isOverdue = in_array($rental['rental_status'], ['delivered', 'pending_return'], true) && $rental['return_date'] < $today;
+$isOverdue = rental_applies_late_fee($rental['rental_status'])
+          && $rental['rental_status'] !== 'returned'
+          && $rental['return_date'] < $today;
 $lateDays  = rental_late_days((string) $rental['return_date'], $rental['actual_return_date'] ?: null);
-$latePend  = $isOverdue ? round($lateDays * late_fee_per_day(), 2) : 0.0;
+$latePend  = rental_late_penalty_for($rental['rental_status'], (string) $rental['return_date'], $rental['actual_return_date'] ?: null);
 
 $pendAlter = array_values(array_filter($items, static fn(array $i): bool =>
     !empty($i['needs_alteration']) && $i['alteration_status'] === 'pending'));

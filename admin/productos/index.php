@@ -251,6 +251,16 @@ $radioCls = 'h-4 w-4 border-gray-300 text-brand-red focus:ring-brand-red/40';
                                     <a href="<?= admin_url('productos/ver.php?id=' . (int) $p['id']) ?>" class="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-400 transition hover:border-gray-300 hover:text-gray-700" title="Ver"><?= icon('eye', 'w-4 h-4') ?></a>
                                     <?php if ($canManage): ?>
                                         <a href="<?= admin_url('productos/editar.php?id=' . (int) $p['id']) ?>" class="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-400 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-600" title="Editar"><?= icon('pencil', 'w-4 h-4') ?></a>
+                                        <form method="post" action="<?= admin_url('productos/eliminar.php') ?>"
+                                              data-confirm="¿Eliminar &quot;<?= e($p['name']) ?>&quot; del inventario? Si tiene alquileres o ventas asociados se desactivará en lugar de borrarse."
+                                              class="inline">
+                                            <?= csrf_field() ?>
+                                            <input type="hidden" name="id" value="<?= (int) $p['id'] ?>">
+                                            <button type="submit" title="Eliminar"
+                                                    class="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-400 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600">
+                                                <?= icon('trash', 'w-4 h-4') ?>
+                                            </button>
+                                        </form>
                                     <?php endif; ?>
                                 </div>
                             </div>

@@ -265,6 +265,19 @@ function business_days_between(string $from, string $to): int
 }
 
 /**
+ * Estados en los que la pieza está FUERA del local y, por tanto, puede
+ * generar mora. Un alquiler reservado o confirmado que nunca se entregó
+ * no genera penalidad aunque su fecha de devolución ya haya pasado.
+ */
+const RENTAL_LATE_FEE_STATUSES = ['delivered', 'pending_return', 'overdue', 'returned'];
+
+/** ¿Este estado de alquiler puede acumular mora? */
+function rental_applies_late_fee(?string $rentalStatus): bool
+{
+    return in_array((string) $rentalStatus, RENTAL_LATE_FEE_STATUSES, true);
+}
+
+/**
  * Días laborables de atraso de un alquiler.
  * Si aún no se ha devuelto se mide contra hoy.
  */
@@ -272,6 +285,16 @@ function rental_late_days(string $returnDate, ?string $actualReturnDate = null):
 {
     $reference = $actualReturnDate ?: date('Y-m-d');
     return business_days_between($returnDate, $reference);
+}
+
+/**
+ * Mora de un alquiler teniendo en cuenta su estado.
+ * Devuelve 0 si la pieza nunca salió del local.
+ */
+function rental_late_penalty_for(?string $rentalStatus, string $returnDate, ?string $actualReturnDate = null): float
+{
+    if (!rental_applies_late_fee($rentalStatus)) return 0.0;
+    return round(rental_late_days($returnDate, $actualReturnDate) * late_fee_per_day(), 2);
 }
 
 /** Penalidad acumulada = días laborables de atraso × tarifa fija. */
@@ -295,7 +318,9 @@ function apply_rental_late_penalty(int $rentalId, ?string $actualReturnDate = nu
     }
 
     $reference = $actualReturnDate ?: ($rental['actual_return_date'] ?: null);
-    $lateDays  = rental_late_days((string) $rental['return_date'], $reference);
+    // Solo acumula mora si la pieza llegó a salir del local.
+    $aplica    = rental_applies_late_fee($rental['rental_status'] ?? null);
+    $lateDays  = $aplica ? rental_late_days((string) $rental['return_date'], $reference) : 0;
     $penalty   = round($lateDays * late_fee_per_day(), 2);
 
     $total = round((float) $rental['rental_price'] - (float) $rental['discount'] + $penalty, 2);

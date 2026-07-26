@@ -223,7 +223,7 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
 <?php if ($isOverdue): ?>
     <?php
     $lateDays    = rental_late_days((string) $rental['return_date'], $rental['actual_return_date'] ?: null);
-    $latePenalty = round($lateDays * late_fee_per_day(), 2);
+    $latePenalty = rental_late_penalty_for($rental['rental_status'], (string) $rental['return_date'], $rental['actual_return_date'] ?: null);
     ?>
     <div class="mb-4 flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 shadow-soft">
         <span class="mt-0.5 text-rose-500"><?= icon('clock', 'w-5 h-5') ?></span>
