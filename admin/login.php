@@ -62,7 +62,8 @@ $page_title = 'Iniciar sesión';
     <div class="relative w-full max-w-md">
         <!-- Marca sobre la tarjeta -->
         <div class="mb-7 flex flex-col items-center text-center">
-            <?= brand_lockup('dark', 'lg') ?>
+            <?php /* Va sobre el degradado oscuro: la marca debe ir en tinta blanca. */ ?>
+            <?= brand_lockup('light', 'lg') ?>
             <p class="mt-4 font-script text-2xl text-brand-gold">Tu gran día comienza aquí</p>
         </div>
 
