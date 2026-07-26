@@ -65,9 +65,10 @@ function kanban_card(array $r): string
         && strtotime($r['return_date']) < strtotime(date('Y-m-d'));
     $balance = (float) $r['remaining_balance'];
     ob_start(); ?>
-    <div class="kanban-card cursor-grab rounded-xl border border-gray-100 bg-white p-3.5 shadow-soft transition hover:shadow-card active:cursor-grabbing" data-id="<?= (int) $r['id'] ?>">
+    <div class="kanban-card group cursor-grab rounded-xl border border-gray-100 bg-white p-3.5 shadow-soft transition hover:border-brand-red/30 hover:shadow-card active:cursor-grabbing"
+         data-id="<?= (int) $r['id'] ?>" data-detalle title="Clic para ver todo el detalle">
         <div class="flex items-center justify-between">
-            <a href="<?= admin_url('alquileres/ver.php?id=' . (int) $r['id']) ?>" class="text-xs font-semibold text-brand-red hover:underline"><?= e($r['rental_number']) ?></a>
+            <span class="text-xs font-semibold text-brand-red group-hover:underline"><?= e($r['rental_number']) ?></span>
             <div class="flex items-center gap-1">
                 <?php if ((int) $r['alterations_pending'] > 0): ?>
                     <span title="<?= (int) $r['alterations_pending'] ?> pieza(s) por modificar"
@@ -106,10 +107,11 @@ function alteration_card(array $a): string
 {
     $urgent = strtotime((string) $a['delivery_date']) <= strtotime('+3 days');
     ob_start(); ?>
-    <div class="rounded-xl border border-amber-200 bg-white p-3.5 shadow-soft transition hover:shadow-card"
-         data-alteration-card data-item="<?= (int) $a['rental_item_id'] ?>">
+    <div class="group cursor-pointer rounded-xl border border-amber-200 bg-white p-3.5 shadow-soft transition hover:shadow-card"
+         data-alteration-card data-item="<?= (int) $a['rental_item_id'] ?>"
+         data-detalle data-id="<?= (int) $a['rental_id'] ?>" title="Clic para ver todo el detalle">
         <div class="flex items-center justify-between">
-            <a href="<?= admin_url('alquileres/ver.php?id=' . (int) $a['rental_id']) ?>" class="text-xs font-semibold text-brand-red hover:underline"><?= e($a['rental_number']) ?></a>
+            <span class="text-xs font-semibold text-brand-red group-hover:underline"><?= e($a['rental_number']) ?></span>
             <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold <?= $urgent ? 'bg-rose-50 text-rose-600' : 'bg-amber-50 text-amber-700' ?>">
                 Entrega <?= e(format_date($a['delivery_date'], 'd/m')) ?><?= format_time($a['delivery_time']) !== '' ? ' · ' . e(format_time($a['delivery_time'])) : '' ?>
             </span>
@@ -172,7 +174,20 @@ function alteration_card(array $a): string
     <?php endforeach; ?>
 </div>
 
-<p class="mt-2 text-xs text-gray-400">Consejo: arrastra una tarjeta a otra columna para actualizar su estado. No podrás marcar “Entregado” si hay saldo pendiente sin autorización.</p>
+<p class="mt-2 text-xs text-gray-400">Consejo: haz clic en una tarjeta para ver todo el detalle, o arrástrala a otra columna para cambiar su estado. No podrás marcar “Entregado” si hay saldo pendiente sin autorización.</p>
+
+<!-- ============ Modal: detalle completo del alquiler ============ -->
+<div id="modalDetalle" data-modal class="fixed inset-0 z-50 hidden items-start justify-center overflow-y-auto bg-brand-dark/60 p-4 backdrop-blur-sm sm:p-6">
+    <div class="my-4 w-full max-w-5xl overflow-hidden rounded-3xl bg-white shadow-card animate-scale-in">
+        <div id="detalleContenido">
+            <!-- Estado de carga (se reemplaza con el detalle) -->
+            <div class="flex flex-col items-center justify-center gap-3 px-6 py-20 text-center">
+                <span class="h-9 w-9 animate-spin rounded-full border-[3px] border-gray-200 border-t-brand-red"></span>
+                <p class="text-sm text-gray-400">Cargando el detalle…</p>
+            </div>
+        </div>
+    </div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 <?php
@@ -192,10 +207,16 @@ ob_start(); ?>
     });
   }
 
+  // Marca de tiempo del último arrastre: evita que soltar una tarjeta
+  // dispare también la apertura del modal.
+  var ultimoArrastre = 0;
+
   document.querySelectorAll('.kanban-col').forEach(function (col) {
     new Sortable(col, {
       group: 'rentals', animation: 160, ghostClass: 'opacity-40',
+      onStart: function () { ultimoArrastre = Date.now(); },
       onEnd: function (evt) {
+        ultimoArrastre = Date.now();
         if (evt.to === evt.from) return;
         var id = evt.item.getAttribute('data-id');
         var status = evt.to.getAttribute('data-status');
@@ -222,6 +243,42 @@ ob_start(); ?>
         });
       }
     });
+  });
+
+  /* ---------- Detalle completo del alquiler en un modal ---------- */
+  var contenido = document.getElementById('detalleContenido');
+  var cargando =
+    '<div class="flex flex-col items-center justify-center gap-3 px-6 py-20 text-center">'
+    + '<span class="h-9 w-9 animate-spin rounded-full border-[3px] border-gray-200 border-t-brand-red"></span>'
+    + '<p class="text-sm text-gray-400">Cargando el detalle…</p></div>';
+
+  document.addEventListener('click', function (event) {
+    // No abrir si se acaba de arrastrar, ni al pulsar un botón/enlace de la tarjeta
+    if (Date.now() - ultimoArrastre < 250) return;
+    if (event.target.closest('a, button')) return;
+
+    var card = event.target.closest('[data-detalle]');
+    if (!card) return;
+
+    var id = card.getAttribute('data-id');
+    if (!id) return;
+
+    contenido.innerHTML = cargando;
+    window.lcnOpenModal('modalDetalle');
+
+    fetch(window.LCN_BASE + '/admin/alquileres/detalle.php?id=' + encodeURIComponent(id), {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+      .then(function (r) { return r.text(); })
+      .then(function (html) { contenido.innerHTML = html; })
+      .catch(function () {
+        contenido.innerHTML =
+          '<div class="px-6 py-16 text-center">'
+          + '<p class="font-serif text-lg text-gray-900">No se pudo cargar el detalle</p>'
+          + '<p class="mt-1 text-sm text-gray-500">Revise su conexión e intente de nuevo.</p>'
+          + '<button type="button" data-modal-close class="mt-5 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50">Cerrar</button>'
+          + '</div>';
+      });
   });
 
   /* ---------- Piezas por modificar: marcar como listas ---------- */

@@ -42,15 +42,31 @@ los archivos y dejar el sitio en línea.
    su código automáticamente al abrir *Inventario → Códigos de barra*.
    Las etiquetas usan la extensión **GD** de PHP (activa por defecto en cPanel); si no estuviera,
    el PDF dibuja las barras igualmente con un método alterno.
-8. **Migración de ajustes 2026‑07‑26** (obligatoria al subir esta versión sobre una BD existente):
-   `mysql -h HOST -u USER -p -D BD --default-character-set=utf8mb4 < database/migrations/2026_07_26_ajustes_cliente.sql`.
-   Añade complementos, mora fija por día laborable, descuento en % y fecha real de devolución.
-   Tras importarla, revise *Configuración → Facturación* para ajustar el monto de la mora
-   (RD$500 por defecto) y si el sábado cuenta como día laborable.
-9. **Migración de hora de entrega y modificaciones** (también obligatoria en esta versión):
-   `mysql -h HOST -u USER -p -D BD --default-character-set=utf8mb4 < database/migrations/2026_07_26_hora_entrega_modificaciones.sql`.
-   Añade la hora de entrega del alquiler y el control de piezas por modificar (ruedo, cintura…)
-   que alimenta la columna *Por modificar* del tablero.
+8. ⚠️ **ACTUALIZACIÓN 2026‑07‑26 — OBLIGATORIA.** Ejecute
+   [`database/migrations/2026_07_26_TODAS_actualizar_produccion.sql`](database/migrations/2026_07_26_TODAS_actualizar_produccion.sql).
+   Es **un solo archivo** que reúne los cambios de esta versión, y es **idempotente**: puede
+   ejecutarse varias veces sin romper nada y también repara una actualización aplicada a medias.
+
+   > **El código de esta versión NO funciona sin esta migración.** Si sube los archivos sin
+   > ejecutarla, el panel devuelve **error 500** al guardar un producto, al crear un alquiler y
+   > al abrir el tablero, el detalle de alquiler, el contrato o la factura. El motivo es que esas
+   > pantallas consultan columnas que aún no existen en la base.
+
+   Formas de ejecutarla:
+   - **phpMyAdmin** (lo más simple): base → pestaña **SQL** → pegar el archivo → *Continuar*.
+   - Consola:
+     `mysql -h HOST -u USER -p -D BD --default-character-set=utf8mb4 < database/migrations/2026_07_26_TODAS_actualizar_produccion.sql`
+
+   Al terminar imprime una tabla de verificación: **las 11 columnas deben decir `OK`**.
+   Añade los complementos, la mora fija por día laborable, el descuento en %, la fecha real de
+   devolución, la hora de entrega y el control de piezas por modificar.
+
+   Después, revise *Configuración → Facturación* para ajustar el monto de la mora (RD$500 por
+   defecto) y si el sábado cuenta como día laborable.
+
+   *(Los archivos `2026_07_26_ajustes_cliente.sql` y `2026_07_26_hora_entrega_modificaciones.sql`
+   quedan solo como referencia histórica: su contenido ya está incluido en el archivo de arriba.
+   No hace falta ejecutarlos por separado.)*
 
 ## 4. Acceso
 

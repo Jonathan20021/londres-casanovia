@@ -201,7 +201,13 @@ formulario de alta y queda visible en la ficha y en la edición del producto.
 - **Alquileres existentes:** ejecute también
   `database/migrations/2026_07_22_rental_items.sql` para habilitar varias piezas por alquiler y
   trasladar automáticamente los registros anteriores a su primera línea de detalle.
-- **Ajustes de 2026‑07‑26:** ejecute `database/migrations/2026_07_26_ajustes_cliente.sql`. Añade:
+- ⚠️ **Actualización 2026‑07‑26 (obligatoria):** ejecute
+  **`database/migrations/2026_07_26_TODAS_actualizar_produccion.sql`** — un único archivo,
+  idempotente, que aplica todo lo de esta versión y repara actualizaciones a medias.
+  **Sin él, el panel da error 500** al guardar productos, crear alquileres y abrir el tablero,
+  el detalle de alquiler, el contrato o la factura. Los dos archivos que se detallan abajo ya
+  están incluidos en él; se conservan solo como referencia.
+- **Ajustes de 2026‑07‑26** (incluido en el archivo anterior). Añade:
   - `products.is_complement` → productos de tipo **Complemento** (corbata, corona, velo…), que
     pueden costar RD$0 y cuyo precio se teclea al crear el alquiler/factura.
   - `business_settings.late_fee_per_day` + `late_fee_workweek` → **penalidad por mora** de monto
@@ -210,8 +216,7 @@ formulario de alta y queda visible en la ficha y en la edición del producto.
   - `rentals.discount_percent` → el **descuento se captura en porcentaje** (se guarda además el
     monto equivalente en `rentals.discount`).
   - `rentals.actual_return_date` → fecha real de devolución, base del cálculo de la mora.
-- **Hora de entrega y modificaciones:** ejecute también
-  `database/migrations/2026_07_26_hora_entrega_modificaciones.sql`. Añade:
+- **Hora de entrega y modificaciones** (también incluido en el archivo consolidado). Añade:
   - `rentals.delivery_time` → **hora de entrega** junto a la fecha (se muestra en el alquiler,
     el listado, el tablero, la factura y el contrato).
   - `rental_items.needs_alteration` + `alteration_notes` + `alteration_status` →
