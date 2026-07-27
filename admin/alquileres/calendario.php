@@ -271,8 +271,8 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
     <?php endforeach; ?>
 </div>
 
-<!-- ====================== Calendario ====================== -->
-<div class="overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-soft">
+<!-- ====================== Calendario (rejilla, desde tablet) ====================== -->
+<div class="hidden overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-soft sm:block">
     <div class="min-w-[820px]">
         <!-- Cabecera de días de la semana -->
         <div class="grid grid-cols-7 border-b border-gray-100 bg-gray-50">
@@ -349,6 +349,67 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
             <?php endfor; ?>
         </div>
     </div>
+</div>
+
+<!-- ====================== Agenda (solo móvil) ======================
+     En pantallas pequeñas una rejilla de 7 columnas obliga a desplazar
+     lateralmente. Aquí se listan únicamente los días con actividad. -->
+<div class="space-y-3 sm:hidden">
+    <?php
+    $diasConEventos = array_filter(
+        array_map(
+            static fn(int $d): array => [
+                'dia'    => $d,
+                'fecha'  => $firstOfMonth->modify('+' . ($d - 1) . ' day')->format('Y-m-d'),
+            ],
+            range(1, $daysInMonth)
+        ),
+        static fn(array $x): bool => !empty($eventsByDay[$x['fecha']])
+    );
+    ?>
+
+    <?php if (!$diasConEventos): ?>
+        <div class="rounded-2xl border border-dashed border-gray-200 bg-white px-4 py-10 text-center">
+            <span class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-gray-50 text-gray-300">
+                <?= icon('calendar', 'w-6 h-6') ?>
+            </span>
+            <p class="text-sm font-medium text-gray-600">Sin actividad en <?= e($tituloMes) ?></p>
+            <p class="mt-1 text-xs text-gray-400">Cambie de mes o ajuste los filtros.</p>
+        </div>
+    <?php endif; ?>
+
+    <?php foreach ($diasConEventos as $info):
+        $dateKey   = $info['fecha'];
+        $dateObj   = new DateTime($dateKey);
+        $dayEvents = $eventsByDay[$dateKey];
+        $isToday   = ($dateKey === $today);
+        $nombreDia = $diasSemana[((int) $dateObj->format('N')) - 1] ?? ''; ?>
+        <section class="overflow-hidden rounded-2xl border bg-white shadow-soft <?= $isToday ? 'border-brand-red/30 ring-1 ring-brand-red/20' : 'border-gray-100' ?>">
+            <header class="flex items-center gap-3 border-b border-gray-100 px-4 py-3 <?= $isToday ? 'bg-red-50/60' : 'bg-gray-50/70' ?>">
+                <span class="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-xl <?= $isToday ? 'bg-brand-red text-white' : 'bg-white text-gray-700 ring-1 ring-gray-200' ?>">
+                    <span class="text-base font-bold leading-none"><?= (int) $info['dia'] ?></span>
+                    <span class="text-[9px] uppercase leading-none opacity-70"><?= e(mb_substr($nombreDia, 0, 3)) ?></span>
+                </span>
+                <div class="min-w-0 flex-1">
+                    <p class="text-sm font-semibold text-gray-900"><?= e(format_date($dateKey)) ?><?= $isToday ? ' · hoy' : '' ?></p>
+                    <p class="text-xs text-gray-400"><?= count($dayEvents) ?> movimiento<?= count($dayEvents) === 1 ? '' : 's' ?></p>
+                </div>
+            </header>
+            <div class="divide-y divide-gray-50">
+                <?php foreach ($dayEvents as $ev): ?>
+                    <a href="<?= e(admin_url('alquileres/ver.php?id=' . (int) $ev['id'])) ?>"
+                       class="flex items-center gap-3 px-4 py-3 transition active:bg-gray-50">
+                        <span class="h-2 w-2 shrink-0 rounded-full <?= str_contains($statusColors[$ev['rental_status']] ?? '', 'emerald') ? 'bg-emerald-500' : 'bg-brand-red' ?>"></span>
+                        <span class="min-w-0 flex-1">
+                            <span class="block truncate text-sm font-medium text-gray-900"><?= e($ev['product_name']) ?></span>
+                            <span class="block truncate text-xs text-gray-500"><?= e($ev['customer_name']) ?></span>
+                        </span>
+                        <span class="shrink-0"><?= status_badge($ev['rental_status'], 'rental') ?></span>
+                    </a>
+                <?php endforeach; ?>
+            </div>
+        </section>
+    <?php endforeach; ?>
 </div>
 
 <?php if (!$rentals): ?>

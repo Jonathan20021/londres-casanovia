@@ -49,19 +49,32 @@ $visibleChildren = function (array $children): array {
 
 /* Clases reutilizables */
 $leafClass = function (bool $isActive): string {
-    return $isActive
-        ? 'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold bg-red-50 text-brand-red'
-        : 'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition';
+    return ($isActive
+        ? 'bg-red-50 text-brand-red font-semibold'
+        : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900 font-medium')
+        . ' lcn-nav-item flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition';
 };
 ?>
 <div id="lcn-sidebar-overlay" class="fixed inset-0 z-30 hidden bg-brand-dark/50 backdrop-blur-sm lg:hidden" data-sidebar-close></div>
 
 <aside id="lcn-sidebar"
-       class="fixed inset-y-0 left-0 z-40 flex w-72 -translate-x-full flex-col border-r border-gray-100 bg-white transition-transform duration-300 lg:translate-x-0">
+       class="lcn-sidebar fixed inset-y-0 left-0 z-40 flex w-72 -translate-x-full flex-col border-r border-gray-100 bg-white transition-transform duration-300 lg:translate-x-0">
 
-    <!-- Logo -->
-    <div class="flex h-20 items-center gap-2 px-6">
-        <a href="<?= admin_url('dashboard.php') ?>" class="flex items-center"><?= brand_lockup('dark', 'sm') ?></a>
+    <!-- Logo + control de colapso -->
+    <div class="flex h-20 items-center gap-2 px-6 lcn-sidebar-head">
+        <a href="<?= admin_url('dashboard.php') ?>" class="flex min-w-0 items-center lcn-nav-label">
+            <?= brand_lockup('dark', 'sm') ?>
+        </a>
+        <!-- Marca compacta: solo visible cuando el menú está plegado -->
+        <a href="<?= admin_url('dashboard.php') ?>" class="lcn-mark-mini mx-auto hidden" title="LONDRES Casa de Novias">
+            <img src="<?= asset('img/logo-cabina.svg') ?>" alt="LONDRES" class="h-8 w-auto">
+        </a>
+
+        <button type="button" data-sidebar-collapse
+                class="lcn-collapse-btn ml-auto hidden h-9 w-9 items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 lg:flex"
+                aria-label="Plegar o desplegar el menú" title="Plegar el menú" aria-expanded="true">
+            <span class="lcn-collapse-icon transition-transform duration-300"><?= icon('chevron-left', 'w-5 h-5') ?></span>
+        </button>
         <button type="button" data-sidebar-close class="ml-auto text-gray-400 hover:text-gray-600 lg:hidden"><?= icon('x', 'w-5 h-5') ?></button>
     </div>
 
@@ -71,22 +84,30 @@ $leafClass = function (bool $isActive): string {
             <?php if ($item['type'] === 'link'):
                 if ($item['perm'] !== null && !user_can($item['perm'])) continue;
                 $isActive = $active === $item['key']; ?>
-                <a href="<?= e($item['url']) ?>" class="<?= $leafClass($isActive) ?>">
-                    <span class="<?= $isActive ? 'text-brand-red' : 'text-gray-400' ?>"><?= icon($item['icon'], 'w-5 h-5') ?></span>
-                    <span class="flex-1"><?= e($item['label']) ?></span>
+                <a href="<?= e($item['url']) ?>" class="<?= $leafClass($isActive) ?>" title="<?= e($item['label']) ?>">
+                    <span class="lcn-nav-icon shrink-0 <?= $isActive ? 'text-brand-red' : 'text-gray-400' ?>"><?= icon($item['icon'], 'w-5 h-5') ?></span>
+                    <span class="lcn-nav-label flex-1"><?= e($item['label']) ?></span>
                 </a>
             <?php else:
                 $children = $visibleChildren($item['children']);
                 if (!$children) continue;
                 $childKeys = array_column($children, 'key');
                 $open = in_array($active, $childKeys, true); ?>
-                <details class="select-none" <?= $open ? 'open' : '' ?>>
-                    <summary class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium <?= $open ? 'text-gray-900' : 'text-gray-500' ?> hover:bg-gray-50">
-                        <span class="<?= $open ? 'text-brand-red' : 'text-gray-400' ?>"><?= icon($item['icon'], 'w-5 h-5') ?></span>
-                        <span class="flex-1"><?= e($item['label']) ?></span>
-                        <span class="acc-chevron text-gray-400"><?= icon('chevron-down', 'w-4 h-4') ?></span>
+                <?php $groupBadge = array_sum(array_map(fn($c) => (int) ($c['badge'] ?? 0), $children)); ?>
+                <details class="lcn-nav-group select-none" <?= $open ? 'open' : '' ?>>
+                    <summary class="lcn-nav-item flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium <?= $open ? 'text-gray-900' : 'text-gray-500' ?> hover:bg-gray-50"
+                             title="<?= e($item['label']) ?>">
+                        <span class="lcn-nav-icon relative shrink-0 <?= $open ? 'text-brand-red' : 'text-gray-400' ?>">
+                            <?= icon($item['icon'], 'w-5 h-5') ?>
+                            <?php if ($groupBadge > 0): ?>
+                                <!-- Aviso visible también con el menú plegado -->
+                                <span class="lcn-mini-badge absolute -right-1.5 -top-1.5 hidden h-2.5 w-2.5 rounded-full bg-brand-red ring-2 ring-white"></span>
+                            <?php endif; ?>
+                        </span>
+                        <span class="lcn-nav-label flex-1"><?= e($item['label']) ?></span>
+                        <span class="acc-chevron lcn-nav-label text-gray-400"><?= icon('chevron-down', 'w-4 h-4') ?></span>
                     </summary>
-                    <div class="mt-1 space-y-1 pl-4">
+                    <div class="lcn-nav-children mt-1 space-y-1 pl-4">
                         <?php foreach ($children as $c):
                             $childActive = $active === $c['key']; ?>
                             <a href="<?= e($c['url']) ?>"
@@ -107,26 +128,32 @@ $leafClass = function (bool $isActive): string {
         <?php
         $sysVisible = array_filter($systemMenu, fn($s) => $s['perm'] === null || user_can($s['perm']));
         if ($sysVisible): ?>
-            <p class="px-3 pb-1 pt-5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Sistema</p>
+            <p class="lcn-nav-section lcn-nav-label px-3 pb-1 pt-5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Sistema</p>
+            <div class="lcn-nav-divider mt-4 hidden border-t border-gray-100"></div>
             <?php foreach ($sysVisible as $s): $isActive = $active === $s['key']; ?>
-                <a href="<?= e($s['url']) ?>" class="<?= $leafClass($isActive) ?>">
-                    <span class="<?= $isActive ? 'text-brand-red' : 'text-gray-400' ?>"><?= icon($s['icon'], 'w-5 h-5') ?></span>
-                    <span class="flex-1"><?= e($s['label']) ?></span>
+                <a href="<?= e($s['url']) ?>" class="<?= $leafClass($isActive) ?>" title="<?= e($s['label']) ?>">
+                    <span class="lcn-nav-icon shrink-0 <?= $isActive ? 'text-brand-red' : 'text-gray-400' ?>"><?= icon($s['icon'], 'w-5 h-5') ?></span>
+                    <span class="lcn-nav-label flex-1"><?= e($s['label']) ?></span>
                 </a>
             <?php endforeach; ?>
         <?php endif; ?>
     </nav>
 
     <!-- Pie: usuario + logout -->
-    <div class="border-t border-gray-100 p-3">
+    <div class="lcn-sidebar-foot border-t border-gray-100 p-3">
         <?php $u = current_user(); ?>
-        <div class="flex items-center gap-3 rounded-2xl bg-gray-50 px-3 py-2.5">
-            <?= avatar($u['name'] ?? '', 'h-9 w-9 text-sm') ?>
-            <div class="min-w-0 flex-1">
+        <div class="lcn-user-pill flex items-center gap-3 rounded-2xl bg-gray-50 px-3 py-2.5"
+             title="<?= e(($u['name'] ?? '') . ' · ' . ($u['role_name'] ?? '')) ?>">
+            <?= avatar($u['name'] ?? '', 'h-9 w-9 text-sm shrink-0') ?>
+            <div class="lcn-nav-label min-w-0 flex-1">
                 <p class="truncate text-sm font-semibold text-gray-900"><?= e($u['name'] ?? '') ?></p>
                 <p class="truncate text-xs text-gray-400"><?= e($u['role_name'] ?? '') ?></p>
             </div>
-            <a href="<?= admin_url('logout.php') ?>" data-confirm="¿Cerrar sesión?" class="text-gray-400 transition hover:text-brand-red" title="Cerrar sesión"><?= icon('logout', 'w-5 h-5') ?></a>
+            <a href="<?= admin_url('logout.php') ?>" data-confirm="¿Cerrar sesión?" class="lcn-nav-label text-gray-400 transition hover:text-brand-red" title="Cerrar sesión"><?= icon('logout', 'w-5 h-5') ?></a>
         </div>
+        <!-- Salir: versión compacta cuando el menú está plegado -->
+        <a href="<?= admin_url('logout.php') ?>" data-confirm="¿Cerrar sesión?"
+           class="lcn-logout-mini mt-2 hidden items-center justify-center rounded-xl py-2 text-gray-400 transition hover:bg-red-50 hover:text-brand-red"
+           title="Cerrar sesión"><?= icon('logout', 'w-5 h-5') ?></a>
     </div>
 </aside>

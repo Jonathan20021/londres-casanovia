@@ -96,3 +96,119 @@ details[open] > summary .acc-chevron { transform: rotate(180deg); }
 @media (prefers-reduced-motion: reduce) {
   .js-reveal [data-reveal] { opacity: 1 !important; transform: none !important; transition: none !important; }
 }
+
+/* ==================================================================
+   MENÚ LATERAL COLAPSABLE (escritorio)
+   El estado vive en <html class="lcn-collapsed"> y se recuerda en el
+   navegador. Plegado = barra de iconos de 5rem con tooltips nativos.
+   ================================================================== */
+.lcn-sidebar,
+.lcn-shell { transition: width .25s ease, padding-left .25s ease; }
+
+@media (min-width: 1024px) {
+  .lcn-collapsed .lcn-sidebar { width: 5rem; }
+  .lcn-collapsed .lcn-shell   { padding-left: 5rem; }
+
+  /* Se ocultan textos, chevrons y encabezados de sección */
+  .lcn-collapsed .lcn-nav-label,
+  .lcn-collapsed .lcn-nav-section,
+  .lcn-collapsed .lcn-nav-children { display: none; }
+
+  /* Los items quedan centrados sobre su icono */
+  .lcn-collapsed .lcn-nav-item {
+    justify-content: center;
+    gap: 0;
+    padding-left: .625rem;
+    padding-right: .625rem;
+  }
+  .lcn-collapsed .lcn-sidebar nav { padding-left: .75rem; padding-right: .75rem; }
+
+  /* Cabecera: se cambia el lockup completo por la cabina */
+  .lcn-collapsed .lcn-sidebar-head { padding-left: .75rem; padding-right: .75rem; }
+  .lcn-collapsed .lcn-mark-mini    { display: block; }
+  .lcn-collapsed .lcn-collapse-btn { position: absolute; top: 4.75rem; right: -0.875rem;
+                                     height: 1.75rem; width: 1.75rem; border-radius: 9999px;
+                                     border: 1px solid #e5e7eb; background: #fff;
+                                     box-shadow: 0 1px 3px rgba(0,0,0,.08); z-index: 1; }
+  .lcn-collapsed .lcn-collapse-icon { transform: rotate(180deg); }
+
+  /* Aviso de pendientes cuando no hay texto */
+  .lcn-collapsed .lcn-mini-badge { display: block; }
+
+  /* Pie de usuario compacto */
+  .lcn-collapsed .lcn-user-pill  { justify-content: center; padding-left: 0; padding-right: 0; background: transparent; }
+  .lcn-collapsed .lcn-logout-mini { display: flex; }
+
+  /* El grupo plegado no debe abrirse por dentro */
+  .lcn-collapsed .lcn-nav-group > summary { list-style: none; }
+}
+
+/* Sin animación si el usuario pidió menos movimiento */
+@media (prefers-reduced-motion: reduce) {
+  .lcn-sidebar, .lcn-shell, .lcn-collapse-icon { transition: none !important; }
+}
+
+/* ==================================================================
+   TABLAS EN MÓVIL
+   Por debajo de 640 px cada fila se convierte en una tarjeta y cada
+   celda muestra el nombre de su columna. El data-label lo pone app.js,
+   así que sirve para todas las tablas del panel.
+   ================================================================== */
+@media (max-width: 639px) {
+  .lcn-table-stack { min-width: 0 !important; }
+  .lcn-table-stack thead { display: none; }
+  .lcn-table-stack,
+  .lcn-table-stack tbody,
+  .lcn-table-stack tr,
+  .lcn-table-stack td { display: block; width: 100%; }
+
+  .lcn-table-stack tr {
+    border: 1px solid #f1f2f4;
+    border-radius: 1rem;
+    background: #fff;
+    padding: .35rem .9rem;
+    margin-bottom: .75rem;
+  }
+  .lcn-table-stack tr:last-child { margin-bottom: 0; }
+
+  .lcn-table-stack td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    text-align: right;
+    padding: .5rem 0 !important;
+    border: 0 !important;
+    border-bottom: 1px solid #f6f7f8 !important;
+  }
+  .lcn-table-stack tr td:last-child { border-bottom: 0 !important; }
+
+  .lcn-table-stack td::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    text-align: left;
+    font-size: .6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #9ca3af;
+  }
+  /* Celdas sin encabezado (columna de acciones): ocupan toda la fila */
+  .lcn-table-stack td:not([data-label]),
+  .lcn-table-stack td[data-label=""] { justify-content: flex-end; }
+  .lcn-table-stack td:not([data-label])::before,
+  .lcn-table-stack td[data-label=""]::before { content: none; }
+
+  /* El contenedor deja de necesitar desplazamiento lateral */
+  .lcn-table-stack { white-space: normal; }
+  .lcn-table-stack td > * { min-width: 0; }
+}
+
+/* ==================================================================
+   RED DE SEGURIDAD: nada debe desbordar el ancho de la pantalla.
+   Se usa `clip` y no `hidden` a propósito: `hidden` crea un contenedor
+   de desplazamiento y rompería la barra superior pegajosa (sticky).
+   ================================================================== */
+html, body { max-width: 100%; }
+body { overflow-x: clip; }
+img, svg, video, canvas { max-width: 100%; }

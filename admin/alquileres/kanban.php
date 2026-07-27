@@ -270,7 +270,11 @@ ob_start(); ?>
       headers: { 'X-Requested-With': 'XMLHttpRequest' }
     })
       .then(function (r) { return r.text(); })
-      .then(function (html) { contenido.innerHTML = html; })
+      .then(function (html) {
+        contenido.innerHTML = html;
+        // La tabla de pagos del modal también debe apilarse en móvil
+        if (window.lcnApilarTablas) window.lcnApilarTablas(contenido);
+      })
       .catch(function () {
         contenido.innerHTML =
           '<div class="px-6 py-16 text-center">'

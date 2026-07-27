@@ -26,7 +26,7 @@ $iconBtn = 'flex h-11 w-11 items-center justify-center rounded-full border borde
 
 <?php require LCN_ROOT . '/app/views/components/sidebar.php'; ?>
 
-<div class="lg:pl-72">
+<div class="lcn-shell lg:pl-72">
     <!-- Topbar -->
     <header class="sticky top-0 z-20 border-b border-gray-100 bg-[#F6F6F4]/85 backdrop-blur-md dark:border-gray-800 dark:bg-[#0f1115]/85">
         <div class="flex h-20 items-center gap-3 px-4 sm:px-6 lg:px-8">
@@ -48,9 +48,10 @@ $iconBtn = 'flex h-11 w-11 items-center justify-center rounded-full border borde
             </form>
 
             <!-- Acciones -->
-            <div class="ml-auto flex items-center gap-2 md:ml-3">
-                <a href="<?= pub_url('index.php') ?>" target="_blank" rel="noopener" class="<?= $iconBtn ?>" title="Ver sitio público"><?= icon('eye', 'w-5 h-5') ?></a>
-                <button type="button" data-theme-toggle class="<?= $iconBtn ?>" title="Modo claro/oscuro">
+            <div class="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2 md:ml-3">
+                <!-- En móvil se ocultan los accesos secundarios para no apretar la barra -->
+                <a href="<?= pub_url('index.php') ?>" target="_blank" rel="noopener" class="<?= $iconBtn ?> hidden sm:flex" title="Ver sitio público"><?= icon('eye', 'w-5 h-5') ?></a>
+                <button type="button" data-theme-toggle class="<?= $iconBtn ?> hidden sm:flex" title="Modo claro/oscuro">
                     <span class="dark:hidden"><?= icon('moon', 'w-5 h-5') ?></span>
                     <span class="hidden dark:inline"><?= icon('sun', 'w-5 h-5') ?></span>
                 </button>
@@ -61,7 +62,7 @@ $iconBtn = 'flex h-11 w-11 items-center justify-center rounded-full border borde
                         <?= icon('bell', 'w-5 h-5') ?>
                         <?php if ($unread > 0): ?><span class="absolute right-2 top-2 flex h-2.5 w-2.5"><span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-red opacity-60"></span><span class="relative inline-flex h-2.5 w-2.5 rounded-full bg-brand-red"></span></span><?php endif; ?>
                     </button>
-                    <div id="notif-menu" data-dropdown class="absolute right-0 mt-2 hidden w-80 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card animate-scale-in">
+                    <div id="notif-menu" data-dropdown class="absolute right-0 mt-2 hidden w-[calc(100vw-2rem)] max-w-sm overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card animate-scale-in sm:w-80">
                         <div class="flex items-center justify-between border-b border-gray-100 px-4 py-3">
                             <p class="text-sm font-semibold text-gray-900">Notificaciones</p>
                             <span class="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-brand-red"><?= $unread ?> nuevas</span>

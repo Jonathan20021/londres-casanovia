@@ -8,7 +8,15 @@
  */
 ?>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<script>
+  /* Estado del menú lateral aplicado ANTES de pintar, para que no haya salto. */
+  try {
+    if (localStorage.getItem('lcnSidebar') === 'collapsed') {
+      document.documentElement.classList.add('lcn-collapsed');
+    }
+  } catch (e) {}
+</script>
 <!-- Icono: la cabina del logo oficial (legible a tamaño diminuto) -->
 <link rel="icon" type="image/svg+xml" href="<?= asset('img/logo-cabina.svg') ?>">
 <link rel="apple-touch-icon" href="<?= asset('img/logo-cabina.png') ?>">

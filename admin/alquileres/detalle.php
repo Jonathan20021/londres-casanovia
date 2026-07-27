@@ -341,7 +341,7 @@ function lcn_dato(string $label, string $valor, string $extra = ''): string
                class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand-red px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700">
                 <?= icon('eye', 'w-4 h-4') ?> Abrir detalle completo
             </a>
-            <div class="grid grid-cols-3 gap-2">
+            <div class="grid grid-cols-1 gap-2 min-[380px]:grid-cols-3">
                 <a href="<?= admin_url('alquileres/editar.php?id=' . $id) ?>"
                    class="inline-flex items-center justify-center gap-1.5 rounded-xl border border-gray-200 px-2 py-2 text-xs font-medium text-gray-700 transition hover:bg-gray-50">
                     <?= icon('pencil', 'w-3.5 h-3.5') ?> Editar

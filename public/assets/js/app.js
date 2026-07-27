@@ -26,7 +26,76 @@
     if (!sb) return;
     sb.classList.toggle('-translate-x-full', !open);
     if (ov) ov.classList.toggle('hidden', !open);
+    // Con el menú móvil abierto, el fondo no debe desplazarse
+    document.body.style.overflow = open ? 'hidden' : '';
   }
+  // Al pasar a escritorio, el menú móvil no debe quedar bloqueando el scroll
+  window.addEventListener('resize', function () {
+    if (window.innerWidth >= 1024) document.body.style.overflow = '';
+  });
+
+  /* ---------- Menú lateral colapsable (escritorio) ---------- */
+  function setCollapsed(collapsed) {
+    root.classList.toggle('lcn-collapsed', collapsed);
+    try { localStorage.setItem('lcnSidebar', collapsed ? 'collapsed' : 'expanded'); } catch (e) {}
+    document.querySelectorAll('[data-sidebar-collapse]').forEach(function (b) {
+      b.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      b.setAttribute('title', collapsed ? 'Desplegar el menú' : 'Plegar el menú');
+    });
+  }
+
+  document.addEventListener('click', function (e) {
+    if (e.target.closest('[data-sidebar-collapse]')) {
+      setCollapsed(!root.classList.contains('lcn-collapsed'));
+      return;
+    }
+    // Con el menú plegado, tocar un grupo lo despliega y abre ese grupo
+    const summary = e.target.closest('.lcn-nav-group > summary');
+    if (summary && root.classList.contains('lcn-collapsed') && window.innerWidth >= 1024) {
+      e.preventDefault();
+      setCollapsed(false);
+      const det = summary.parentElement;
+      if (det) det.open = true;
+    }
+  });
+
+  // Atajo de teclado: Ctrl/Cmd + B
+  document.addEventListener('keydown', function (e) {
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'b' || e.key === 'B')) {
+      const target = e.target;
+      const editing = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+      if (editing) return;
+      e.preventDefault();
+      setCollapsed(!root.classList.contains('lcn-collapsed'));
+    }
+  });
+
+  // Sincronizar el estado inicial de los botones
+  setCollapsed(root.classList.contains('lcn-collapsed'));
+
+  /* ---------- Tablas legibles en móvil ----------
+     Cada celda hereda el título de su columna en un data-label; el CSS
+     convierte la fila en una tarjeta apilada por debajo de 640 px.
+     Se aplica a cualquier tabla del panel, también a las que se añadan
+     en el futuro, sin tocar el HTML de cada página. */
+  function apilarTablas(scope) {
+    (scope || document).querySelectorAll('table:not([data-no-stack])').forEach(function (table) {
+      const heads = Array.prototype.map.call(
+        table.querySelectorAll('thead th'),
+        function (th) { return th.textContent.trim(); }
+      );
+      if (!heads.length) return;
+      table.classList.add('lcn-table-stack');
+      table.querySelectorAll('tbody tr').forEach(function (tr) {
+        Array.prototype.forEach.call(tr.children, function (td, i) {
+          if (heads[i] && !td.hasAttribute('data-label')) td.setAttribute('data-label', heads[i]);
+        });
+      });
+    });
+  }
+  apilarTablas();
+  // Disponible para contenido cargado por AJAX (p. ej. el modal del tablero)
+  window.lcnApilarTablas = apilarTablas;
 
   /* ---------- Dropdowns (toggle por id) ---------- */
   document.addEventListener('click', function (e) {
