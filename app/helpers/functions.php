@@ -17,7 +17,32 @@ function e($value): string
  *  Generación de URLs
  * ------------------------------------------------------------------ */
 function url(string $path = ''): string  { return APP_URL . '/' . ltrim($path, '/'); }
-function asset(string $path = ''): string { return APP_URL . '/public/assets/' . ltrim($path, '/'); }
+
+/**
+ * URL de un recurso estático.
+ *
+ * A las hojas de estilo y a los scripts se les añade ?v=<fecha del archivo>.
+ * Sin eso el navegador sigue sirviendo la copia guardada en caché y los
+ * cambios de CSS/JS no llegan al usuario hasta que vacía la caché a mano.
+ */
+function asset(string $path = ''): string
+{
+    $path = ltrim($path, '/');
+    $url  = APP_URL . '/public/assets/' . $path;
+
+    $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+    if ($ext !== 'css' && $ext !== 'js') {
+        return $url;
+    }
+
+    static $versiones = [];
+    if (!array_key_exists($path, $versiones)) {
+        $file = LCN_ROOT . '/public/assets/' . $path;
+        $versiones[$path] = is_file($file) ? (string) filemtime($file) : '';
+    }
+
+    return $versiones[$path] !== '' ? $url . '?v=' . $versiones[$path] : $url;
+}
 
 /**
  * Normaliza una ruta a "URL limpia": separa la query, quita ".php" y
