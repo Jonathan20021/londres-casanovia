@@ -67,6 +67,18 @@ los archivos y dejar el sitio en línea.
    *(Los archivos `2026_07_26_ajustes_cliente.sql` y `2026_07_26_hora_entrega_modificaciones.sql`
    quedan solo como referencia histórica: su contenido ya está incluido en el archivo de arriba.
    No hace falta ejecutarlos por separado.)*
+9. ⚠️ **ACTUALIZACIÓN 2026‑08‑03 — un código de barras por UNIDAD.** Ejecute
+   [`database/migrations/2026_08_03_product_units.sql`](database/migrations/2026_08_03_product_units.sql).
+   Crea la tabla `product_units`: si un producto tiene *Cantidad en stock* = 10, el sistema genera
+   **10 códigos distintos** (`LCN000042U01` … `LCN000042U10`) para pegarle su etiqueta a cada pieza.
+   Es idempotente (`CREATE TABLE IF NOT EXISTS`) y no toca ninguna tabla existente.
+
+   > Sin esta migración el panel **sigue funcionando** con el código único por producto (la app
+   > detecta que la tabla no existe), pero no podrá imprimir una etiqueta por unidad.
+
+   Al terminar, abra *Inventario → Códigos de barra*: las unidades que falten se crean solas según
+   la cantidad en stock de cada producto. Las etiquetas ya impresas (código maestro) siguen siendo
+   válidas: el escáner las reconoce igual.
 
 ## 4. Acceso
 

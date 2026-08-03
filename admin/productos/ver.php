@@ -32,6 +32,10 @@ if ($productBarcode === '') {
     $productBarcode = barcode_assign($id);
 }
 
+/* Una unidad física (y un código) por cada pieza del stock */
+barcode_units_sync($id);
+$units = barcode_units($id);
+
 /* Imágenes (principal primero) */
 $images = db_all('SELECT * FROM product_images WHERE product_id = :id ORDER BY is_main DESC, sort_order ASC, id ASC', ['id' => $id]);
 $mainImage = $product['main_image'] ?: ($images[0]['image_path'] ?? null);
@@ -80,19 +84,29 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
                 </div>
             </div>
 
-            <!-- Código de barras -->
+            <!-- Código de barras maestro -->
             <div class="rounded-2xl border border-gray-100 bg-white p-5 shadow-soft">
                 <div class="mb-3 flex items-center justify-between">
-                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Código de barras</p>
+                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Código maestro</p>
                     <span class="font-mono text-[11px] tracking-widest text-gray-500">Code 128</span>
                 </div>
                 <div class="rounded-xl border border-gray-100 px-3 py-3">
                     <?= barcode_svg($productBarcode, ['module' => 1.7, 'height' => 52]) ?>
                 </div>
+                <p class="mt-2 text-xs text-gray-500">
+                    Identifica al artículo en general. Cada unidad tiene además su propio código
+                    <a href="#unidades" class="font-medium text-brand-red hover:underline">(<?= count($units) ?>)</a>.
+                </p>
                 <div class="mt-3 flex flex-wrap items-center gap-2">
-                    <a href="<?= admin_url('codigos-barra/exportar.php?ids=' . $id) ?>"
+                    <?php if ($units): ?>
+                        <a href="<?= admin_url('codigos-barra/exportar.php?ids=' . $id . '&modo=unidades') ?>"
+                           class="inline-flex items-center gap-1.5 rounded-lg bg-brand-red px-3 py-2 text-xs font-semibold text-white transition hover:bg-red-700">
+                            <?= icon('printer', 'w-4 h-4') ?> Imprimir <?= count($units) ?> etiqueta<?= count($units) === 1 ? '' : 's' ?>
+                        </a>
+                    <?php endif; ?>
+                    <a href="<?= admin_url('codigos-barra/exportar.php?ids=' . $id . '&modo=producto') ?>"
                        class="inline-flex items-center gap-1.5 rounded-lg bg-brand-dark px-3 py-2 text-xs font-semibold text-white transition hover:bg-black">
-                        <?= icon('printer', 'w-4 h-4') ?> Imprimir etiqueta
+                        <?= icon('printer', 'w-4 h-4') ?> Etiqueta maestra
                     </a>
                     <a href="<?= admin_url('codigos-barra/index.php?q=' . urlencode($productBarcode)) ?>"
                        class="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-600 transition hover:bg-gray-50">
@@ -219,6 +233,54 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
                     </div>
                 <?php endif; ?>
             </dl>
+        </div>
+
+        <!-- Unidades físicas y sus códigos -->
+        <div id="unidades" class="rounded-2xl border border-gray-100 bg-white p-6 shadow-soft">
+            <div class="mb-1 flex flex-wrap items-center justify-between gap-3">
+                <h3 class="font-serif text-lg text-gray-900">Unidades y códigos de barra</h3>
+                <span class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600">
+                    <?= count($units) ?> de <?= (int) $product['quantity'] ?> en stock
+                </span>
+            </div>
+            <p class="mb-4 text-sm text-gray-500">
+                Cada pieza tiene su propia etiqueta: al escanearla el sistema sabe exactamente
+                cuál de las <?= (int) $product['quantity'] ?> es.
+            </p>
+
+            <?php if (!$units): ?>
+                <?= empty_state('Sin unidades', 'Ponga una cantidad en stock (1 o más) al editar el producto y se generará un código por unidad.', 'tag') ?>
+            <?php else: ?>
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <?php foreach ($units as $u): ?>
+                        <div class="rounded-xl border border-gray-100 p-3">
+                            <div class="mb-2 flex items-center justify-between">
+                                <span class="text-xs font-semibold text-gray-700">Unidad <?= (int) $u['unit_number'] ?> <span class="font-normal text-gray-400">de <?= count($units) ?></span></span>
+                                <a href="<?= admin_url('codigos-barra/exportar.php?unit_ids=' . (int) $u['id']) ?>"
+                                   class="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2 py-1 text-[11px] font-medium text-gray-600 transition hover:bg-gray-50">
+                                    <?= icon('printer', 'w-3.5 h-3.5') ?> PDF
+                                </a>
+                            </div>
+                            <div class="rounded-lg border border-gray-100 px-2 py-2">
+                                <?= barcode_svg((string) $u['barcode'], ['module' => 1.4, 'height' => 40]) ?>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+
+                <div class="mt-4 flex flex-wrap items-center gap-2">
+                    <a href="<?= admin_url('codigos-barra/exportar.php?ids=' . $id . '&modo=unidades') ?>"
+                       class="inline-flex items-center gap-2 rounded-xl bg-brand-red px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700">
+                        <?= icon('printer', 'w-4 h-4') ?> Imprimir las <?= count($units) ?> etiquetas
+                    </a>
+                    <?php if ($canManage): ?>
+                        <a href="<?= admin_url('productos/editar.php?id=' . $id) ?>#quantity"
+                           class="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50">
+                            <?= icon('pencil', 'w-4 h-4') ?> Cambiar cantidad
+                        </a>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
         </div>
 
         <!-- Notas internas (solo gestores) -->

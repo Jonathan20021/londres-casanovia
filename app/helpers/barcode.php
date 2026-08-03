@@ -173,9 +173,178 @@ function barcode_next_preview(): string
     return barcode_for_id($maxId + 1);
 }
 
+/* ================================================================== *
+ *  UNIDADES FÍSICAS (una etiqueta por pieza del stock)
+ *
+ *  "Cantidad en stock = 10" significa 10 trajes reales, así que se crean
+ *  10 unidades con 10 códigos distintos: PREFIJO + id + U + nº de unidad.
+ *  Ej.: producto 42 → LCN000042U01 … LCN000042U10.
+ *  El código del PRODUCTO (LCN000042) se conserva como código maestro.
+ * ================================================================== */
+
+/** Tope de unidades por producto: evita que un tecleo (9999) genere miles de filas. */
+function barcode_units_max(): int
+{
+    return 300;
+}
+
+/** ¿Existe la tabla product_units? (evita fallos pre-migración) */
+function barcode_units_enabled(): bool
+{
+    static $exists = null;
+    if ($exists !== null) return $exists;
+    try {
+        $exists = db_one("SHOW TABLES LIKE 'product_units'") !== null;
+    } catch (Throwable $e) {
+        $exists = false;
+    }
+    return $exists;
+}
+
+/** Código canónico de una unidad: PREFIJO + id a 6 dígitos + U + nº a 2 dígitos. */
+function barcode_unit_code(int $productId, int $unitNumber): string
+{
+    $n = max(1, $unitNumber);
+    return barcode_for_id($productId) . 'U' . str_pad((string) $n, 2, '0', STR_PAD_LEFT);
+}
+
+/** Unidades de un producto, ordenadas. */
+function barcode_units(int $productId): array
+{
+    if (!barcode_units_enabled()) return [];
+    return db_all(
+        'SELECT * FROM product_units WHERE product_id = :id ORDER BY unit_number ASC',
+        ['id' => $productId]
+    );
+}
+
+function barcode_units_count(int $productId): int
+{
+    if (!barcode_units_enabled()) return 0;
+    return (int) db_value('SELECT COUNT(*) FROM product_units WHERE product_id = :id', ['id' => $productId]);
+}
+
+/** ¿El código ya está en uso por otra unidad u otro producto? */
+function barcode_code_taken(string $code, int $exceptUnitId = 0): bool
+{
+    if (barcode_units_enabled()) {
+        $n = (int) db_value(
+            'SELECT COUNT(*) FROM product_units WHERE barcode = :b AND id <> :id',
+            ['b' => $code, 'id' => $exceptUnitId]
+        );
+        if ($n > 0) return true;
+    }
+    if (barcode_column_exists()) {
+        if ((int) db_value('SELECT COUNT(*) FROM products WHERE barcode = :b', ['b' => $code]) > 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Ajusta las unidades de un producto a su cantidad en stock.
+ *   - Crea las que falten (con su código propio).
+ *   - Elimina las sobrantes (siempre las de numeración más alta).
+ * Devuelve ['created','removed','total','requested','capped'].
+ *
+ * @param int|null $quantity  Si es null se lee de products.quantity.
+ * @param bool     $force     Regenera además el código de las unidades existentes
+ *                            (útil si cambió el prefijo de la marca).
+ */
+function barcode_units_sync(int $productId, ?int $quantity = null, bool $force = false): array
+{
+    $out = ['created' => 0, 'removed' => 0, 'total' => 0, 'requested' => 0, 'capped' => false];
+    if (!barcode_units_enabled() || $productId <= 0) return $out;
+
+    if ($quantity === null) {
+        $quantity = (int) db_value('SELECT quantity FROM products WHERE id = :id', ['id' => $productId]);
+    }
+    $requested = max(0, (int) $quantity);
+    $target    = min($requested, barcode_units_max());
+
+    $out['requested'] = $requested;
+    $out['capped']    = $requested > $target;
+
+    $existing = [];
+    foreach (barcode_units($productId) as $u) {
+        $existing[(int) $u['unit_number']] = $u;
+    }
+
+    /* Sobrantes: se borran las unidades por encima de la cantidad actual. */
+    foreach ($existing as $num => $u) {
+        if ($num > $target) {
+            db_delete('product_units', 'id = :id', ['id' => (int) $u['id']]);
+            unset($existing[$num]);
+            $out['removed']++;
+        }
+    }
+
+    /* Faltantes (y, con $force, refresco del código de las existentes). */
+    for ($n = 1; $n <= $target; $n++) {
+        $code = barcode_unit_code($productId, $n);
+        $has  = $existing[$n] ?? null;
+
+        if ($has === null) {
+            $unique = $code;
+            $i = 1;
+            while (barcode_code_taken($unique)) {
+                $unique = $code . 'X' . $i++;
+            }
+            db_insert('product_units', [
+                'product_id'  => $productId,
+                'unit_number' => $n,
+                'barcode'     => $unique,
+            ]);
+            $out['created']++;
+        } elseif ($force && (string) $has['barcode'] !== $code && !barcode_code_taken($code, (int) $has['id'])) {
+            db_update('product_units', ['barcode' => $code], 'id = :id', ['id' => (int) $has['id']]);
+        }
+    }
+
+    $out['total'] = $target;
+    return $out;
+}
+
+/** Crea las unidades que falten en TODO el inventario. Devuelve cuántas creó. */
+function barcode_units_backfill(): int
+{
+    if (!barcode_units_enabled()) return 0;
+
+    /* Sólo productos cuyo nº de unidades no coincide con su stock. */
+    $rows = db_all(
+        'SELECT p.id, p.quantity, COUNT(u.id) AS units
+         FROM products p
+         LEFT JOIN product_units u ON u.product_id = p.id
+         GROUP BY p.id, p.quantity
+         HAVING units <> LEAST(GREATEST(p.quantity, 0), ' . barcode_units_max() . ')'
+    );
+
+    $created = 0;
+    foreach ($rows as $r) {
+        $res = barcode_units_sync((int) $r['id'], (int) $r['quantity']);
+        $created += $res['created'];
+    }
+    return $created;
+}
+
+/** Busca la unidad física correspondiente a un código leído. */
+function barcode_unit_lookup(string $raw): ?array
+{
+    if (!barcode_units_enabled()) return null;
+
+    $code = barcode_normalize($raw);
+    if ($code === '') return null;
+
+    return db_one('SELECT * FROM product_units WHERE UPPER(barcode) = :c LIMIT 1', ['c' => $code]);
+}
+
 /**
  * Busca un producto a partir de lo que envió el lector.
- * Acepta el código completo, el SKU, sólo los dígitos o el ID.
+ * Acepta el código de unidad, el código del producto, el SKU, sólo los dígitos o el ID.
+ *
+ * Si el código leído es de una unidad, la fila devuelta añade las claves
+ * unit_id / unit_number / unit_barcode / unit_status / unit_total.
  */
 function barcode_lookup(string $raw): ?array
 {
@@ -183,6 +352,25 @@ function barcode_lookup(string $raw): ?array
     if ($code === '') return null;
 
     $hasBarcode = barcode_column_exists();
+
+    /* 1) Unidad física — es lo que llevan las etiquetas nuevas. */
+    $unit = barcode_unit_lookup($code);
+    if ($unit) {
+        $row = db_one(
+            'SELECT p.*, c.name AS category_name
+             FROM products p LEFT JOIN categories c ON c.id = p.category_id
+             WHERE p.id = :id LIMIT 1',
+            ['id' => (int) $unit['product_id']]
+        );
+        if ($row) {
+            $row['unit_id']      = (int) $unit['id'];
+            $row['unit_number']  = (int) $unit['unit_number'];
+            $row['unit_barcode'] = (string) $unit['barcode'];
+            $row['unit_status']  = (string) $unit['status'];
+            $row['unit_total']   = barcode_units_count((int) $unit['product_id']);
+            return $row;
+        }
+    }
 
     if ($hasBarcode) {
         $row = db_one(
@@ -202,6 +390,36 @@ function barcode_lookup(string $raw): ?array
         ['c' => $code]
     );
     if ($row) return $row;
+
+    /*
+     * Etiqueta de unidad cuya fila ya no existe (stock reducido, código
+     * regenerado…): se resuelve por el código maestro que lleva delante.
+     * Sin esto, el bloque de dígitos de abajo leería "00004203" y devolvería
+     * el producto 4203, que no tiene nada que ver.
+     */
+    if (preg_match('/^(.+?)U(\d+)(?:X\d+)?$/', $code, $m)) {
+        $base = $m[1];
+        if ($hasBarcode) {
+            $row = db_one(
+                'SELECT p.*, c.name AS category_name
+                 FROM products p LEFT JOIN categories c ON c.id = p.category_id
+                 WHERE UPPER(p.barcode) = :c LIMIT 1',
+                ['c' => $base]
+            );
+            if ($row) return $row;
+        }
+        $baseId = (int) ltrim(preg_replace('/\D+/', '', $base) ?? '', '0');
+        if ($baseId > 0) {
+            $row = db_one(
+                'SELECT p.*, c.name AS category_name
+                 FROM products p LEFT JOIN categories c ON c.id = p.category_id
+                 WHERE p.id = :id LIMIT 1',
+                ['id' => $baseId]
+            );
+            if ($row) return $row;
+        }
+        return null;
+    }
 
     /* Sólo dígitos: el lector pudo omitir el prefijo o ser un ID directo. */
     $digits = preg_replace('/\D+/', '', $code) ?? '';

@@ -18,6 +18,12 @@ if ($generated > 0) {
     flash('success', $generated . ' producto(s) recibieron su código de barras automáticamente.');
 }
 
+/* Una unidad (con código propio) por cada pieza en stock */
+$generatedUnits = barcode_units_backfill();
+if ($generatedUnits > 0) {
+    flash('info', $generatedUnits . ' unidad(es) recibieron su código individual según la cantidad en stock.');
+}
+
 /* ------------------------------------------------------------------ *
  *  Escáner (?scan=) — funciona con cualquier lector tipo teclado
  * ------------------------------------------------------------------ */
@@ -34,10 +40,12 @@ $type       = get_param('type');
 $comStatus  = get_param('commercial_status');
 $tam        = get_param('tam', 'mediana');
 $copias     = max(1, min(50, (int) get_param('copias', '1')));
+$modo       = get_param('modo', 'unidades');
 
 if (!in_array($type, ['rental', 'sale', 'both'], true)) $type = '';
 if (!in_array($comStatus, ['available', 'reserved', 'rented', 'sold', 'unavailable', 'maintenance'], true)) $comStatus = '';
 if (!array_key_exists($tam, barcode_layouts())) $tam = 'mediana';
+if (!in_array($modo, ['unidades', 'producto'], true)) $modo = 'unidades';
 
 $where  = [];
 $params = [];
@@ -53,9 +61,15 @@ $whereSql = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
 $total = (int) db_value("SELECT COUNT(*) FROM products p $whereSql", $params);
 $pg    = paginate($total, 24);
 
+/* Nº de unidades (etiquetas) de cada producto — 0 si aún no se migró la tabla */
+$unitCountSql = barcode_units_enabled()
+    ? '(SELECT COUNT(*) FROM product_units u WHERE u.product_id = p.id)'
+    : '0';
+
 $products = db_all(
     "SELECT p.id, p.name, p.sku, p.barcode, p.size, p.color, p.type, p.rental_price, p.sale_price,
-            p.commercial_status, p.main_image, c.name AS category_name
+            p.commercial_status, p.main_image, p.quantity, c.name AS category_name,
+            $unitCountSql AS unit_count
      FROM products p
      LEFT JOIN categories c ON c.id = p.category_id
      $whereSql
@@ -64,9 +78,15 @@ $products = db_all(
     $params
 );
 
+/* Etiquetas que saldrían al exportar "todo lo filtrado" en modo unidades */
+$totalUnits = barcode_units_enabled()
+    ? (int) db_value("SELECT COALESCE(SUM($unitCountSql), 0) FROM products p $whereSql", $params)
+    : 0;
+
 $categories  = db_all("SELECT id, name FROM categories WHERE status = 'active' ORDER BY name ASC");
 $totalProds  = (int) db_value('SELECT COUNT(*) FROM products');
 $withCode    = (int) db_value("SELECT COUNT(*) FROM products WHERE barcode IS NOT NULL AND barcode <> ''");
+$unitsAll    = barcode_units_enabled() ? (int) db_value('SELECT COUNT(*) FROM product_units') : 0;
 $hasFilters  = $q !== '' || $categoryId || $type !== '' || $comStatus !== '';
 $layouts     = barcode_layouts();
 
@@ -133,13 +153,19 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
                         <?php endif; ?>
                     </div>
                     <div class="min-w-0 flex-1">
-                        <div class="flex items-center gap-2">
+                        <div class="flex flex-wrap items-center gap-2">
                             <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700"><?= icon('check', 'w-3.5 h-3.5') ?> Encontrado</span>
+                            <?php if (!empty($scanned['unit_number'])): ?>
+                                <span class="inline-flex items-center gap-1 rounded-full bg-brand-red/10 px-2.5 py-1 text-xs font-semibold text-brand-red">
+                                    <?= icon('tag', 'w-3.5 h-3.5') ?>
+                                    Unidad <?= (int) $scanned['unit_number'] ?><?= !empty($scanned['unit_total']) ? ' de ' . (int) $scanned['unit_total'] : '' ?>
+                                </span>
+                            <?php endif; ?>
                             <?= status_badge($scanned['commercial_status'], 'commercial') ?>
                         </div>
                         <h3 class="mt-2 truncate font-serif text-xl text-gray-900"><?= e($scanned['name']) ?></h3>
                         <p class="mt-0.5 text-sm text-gray-500">
-                            <span class="font-mono text-gray-700"><?= e((string) ($scanned['barcode'] ?? '')) ?></span>
+                            <span class="font-mono text-gray-700"><?= e((string) ($scanned['unit_barcode'] ?? $scanned['barcode'] ?? '')) ?></span>
                             <?php if (!empty($scanned['sku'])): ?> · SKU <?= e($scanned['sku']) ?><?php endif; ?>
                             <?php if ($sPrice > 0): ?> · <span class="font-semibold text-gray-900"><?= e(money($sPrice)) ?></span><?php endif; ?>
                         </p>
@@ -147,8 +173,13 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
                             <a href="<?= admin_url('productos/ver.php?id=' . (int) $scanned['id']) ?>" class="inline-flex items-center gap-2 rounded-xl bg-brand-dark px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-black">
                                 <?= icon('eye', 'w-4 h-4') ?> Ver ficha
                             </a>
-                            <a href="<?= admin_url('codigos-barra/exportar.php?ids=' . (int) $scanned['id'] . '&tam=' . e($tam)) ?>" class="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3.5 py-2 text-xs font-semibold text-gray-700 transition hover:bg-gray-50">
-                                <?= icon('printer', 'w-4 h-4') ?> Etiqueta PDF
+                            <?php if (!empty($scanned['unit_id'])): ?>
+                                <a href="<?= admin_url('codigos-barra/exportar.php?unit_ids=' . (int) $scanned['unit_id'] . '&tam=' . e($tam)) ?>" class="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3.5 py-2 text-xs font-semibold text-gray-700 transition hover:bg-gray-50">
+                                    <?= icon('printer', 'w-4 h-4') ?> Reponer esta etiqueta
+                                </a>
+                            <?php endif; ?>
+                            <a href="<?= admin_url('codigos-barra/exportar.php?ids=' . (int) $scanned['id'] . '&modo=unidades&tam=' . e($tam)) ?>" class="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3.5 py-2 text-xs font-semibold text-gray-700 transition hover:bg-gray-50">
+                                <?= icon('printer', 'w-4 h-4') ?> Todas sus etiquetas
                             </a>
                             <?php if ($canManage): ?>
                                 <a href="<?= admin_url('alquileres/crear.php?product=' . (int) $scanned['id']) ?>" class="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3.5 py-2 text-xs font-semibold text-gray-700 transition hover:bg-gray-50">
@@ -158,7 +189,7 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
                         </div>
                     </div>
                     <div class="w-full shrink-0 sm:w-48">
-                        <?= barcode_svg((string) ($scanned['barcode'] ?? ''), ['module' => 1.6, 'height' => 46]) ?>
+                        <?= barcode_svg((string) ($scanned['unit_barcode'] ?? $scanned['barcode'] ?? ''), ['module' => 1.6, 'height' => 46]) ?>
                     </div>
                 </div>
             <?php elseif ($scanFailed): ?>
@@ -173,13 +204,14 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
                 <div class="flex h-full flex-col justify-center">
                     <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Cómo funciona</p>
                     <ul class="mt-3 space-y-2 text-sm text-gray-600">
-                        <li class="flex gap-2"><span class="text-brand-gold">1.</span> Cada producto recibe un código <strong>Code 128</strong> único al registrarse.</li>
-                        <li class="flex gap-2"><span class="text-brand-gold">2.</span> Imprima las etiquetas y colóquelas en el vestido, traje o accesorio.</li>
-                        <li class="flex gap-2"><span class="text-brand-gold">3.</span> Al escanear, el lector escribe el código y confirma con Enter: aquí verá la ficha al instante.</li>
+                        <li class="flex gap-2"><span class="text-brand-gold">1.</span> Cada <strong>unidad</strong> en stock recibe su propio código <strong>Code 128</strong>: si hay 10 trajes negros, se generan 10 códigos distintos.</li>
+                        <li class="flex gap-2"><span class="text-brand-gold">2.</span> Imprima las etiquetas y pegue una a cada vestido, traje o accesorio.</li>
+                        <li class="flex gap-2"><span class="text-brand-gold">3.</span> Al escanear, el lector escribe el código y confirma con Enter: aquí verá la ficha y <strong>qué unidad</strong> es.</li>
                     </ul>
                     <div class="mt-4 flex flex-wrap gap-4 text-sm">
                         <span class="text-gray-500">Productos: <strong class="text-gray-900"><?= $totalProds ?></strong></span>
                         <span class="text-gray-500">Con código: <strong class="text-gray-900"><?= $withCode ?></strong></span>
+                        <span class="text-gray-500">Unidades etiquetables: <strong class="text-gray-900"><?= $unitsAll ?></strong></span>
                     </div>
                 </div>
             <?php endif; ?>
@@ -225,6 +257,7 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
     </div>
     <input type="hidden" name="tam" value="<?= e($tam) ?>">
     <input type="hidden" name="copias" value="<?= (int) $copias ?>">
+    <input type="hidden" name="modo" value="<?= e($modo) ?>">
     <button type="submit" class="inline-flex items-center gap-2 rounded-xl bg-brand-dark px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-black">
         <?= icon('filter', 'w-4 h-4') ?> Aplicar
     </button>
@@ -246,6 +279,14 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
             <input type="checkbox" id="checkAll" class="h-4 w-4 rounded border-gray-300 text-brand-red focus:ring-brand-red/40">
             Seleccionar todo
         </label>
+
+        <div class="w-56">
+            <label class="lcn-label" for="modo">Qué imprimir</label>
+            <select id="modo" name="modo" class="lcn-input text-sm">
+                <option value="unidades" <?= $modo === 'unidades' ? 'selected' : '' ?>>Una etiqueta por unidad</option>
+                <option value="producto" <?= $modo === 'producto' ? 'selected' : '' ?>>Una etiqueta por producto</option>
+            </select>
+        </div>
 
         <div class="w-56">
             <label class="lcn-label" for="tam">Tamaño de etiqueta</label>
@@ -275,6 +316,7 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
             </button>
             <button type="submit" name="all" value="1" class="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50">
                 <?= icon('download', 'w-4 h-4') ?> Exportar todo<?= $hasFilters ? ' (filtrado)' : '' ?> · <?= $total ?>
+                <span class="text-xs font-normal text-gray-400" data-total-units="<?= $totalUnits ?>" data-total-prods="<?= $total ?>">(<?= $totalUnits ?> etiquetas)</span>
             </button>
         </div>
     </div>
@@ -286,10 +328,11 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
             <?php foreach ($products as $p):
                 $code  = (string) ($p['barcode'] ?? '');
                 $price = $p['type'] === 'sale' ? (float) ($p['sale_price'] ?? 0) : (float) $p['rental_price'];
+                $nUnit = (int) $p['unit_count'];
             ?>
                 <label data-card class="group relative flex cursor-pointer flex-col rounded-2xl border border-gray-100 bg-white p-4 shadow-soft transition hover:border-brand-red/30">
                     <div class="flex items-start gap-3">
-                        <input type="checkbox" name="ids[]" value="<?= (int) $p['id'] ?>" data-item
+                        <input type="checkbox" name="ids[]" value="<?= (int) $p['id'] ?>" data-item data-units="<?= $nUnit ?>"
                                class="mt-1 h-4 w-4 shrink-0 rounded border-gray-300 text-brand-red focus:ring-brand-red/40">
                         <div class="min-w-0 flex-1">
                             <h3 class="truncate text-sm font-semibold text-gray-900" title="<?= e($p['name']) ?>"><?= e($p['name']) ?></h3>
@@ -306,14 +349,22 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
                         <?= barcode_svg($code, ['module' => 1.5, 'height' => 44]) ?>
                     </div>
 
-                    <div class="mt-3 flex items-center gap-2">
+                    <div class="mt-2 flex items-center gap-2">
+                        <span class="inline-flex items-center gap-1 rounded-full <?= $nUnit > 1 ? 'bg-brand-red/10 text-brand-red' : 'bg-gray-100 text-gray-500' ?> px-2 py-0.5 text-[11px] font-semibold">
+                            <?= icon('tag', 'w-3 h-3') ?>
+                            <?= $nUnit ?> etiqueta<?= $nUnit === 1 ? '' : 's' ?>
+                        </span>
+                        <span class="text-[11px] text-gray-400">Stock <?= (int) $p['quantity'] ?></span>
+                    </div>
+
+                    <div class="mt-2 flex items-center gap-2">
                         <a href="<?= admin_url('productos/ver.php?id=' . (int) $p['id']) ?>"
                            class="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 transition hover:bg-gray-50">
                             <?= icon('eye', 'w-3.5 h-3.5') ?> Ficha
                         </a>
-                        <a href="<?= admin_url('codigos-barra/exportar.php?ids=' . (int) $p['id'] . '&tam=' . e($tam) . '&copias=' . (int) $copias) ?>"
+                        <a href="<?= admin_url('codigos-barra/exportar.php?ids=' . (int) $p['id'] . '&modo=unidades&tam=' . e($tam) . '&copias=' . (int) $copias) ?>"
                            class="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 transition hover:bg-gray-50">
-                            <?= icon('printer', 'w-3.5 h-3.5') ?> PDF
+                            <?= icon('printer', 'w-3.5 h-3.5') ?> PDF<?= $nUnit > 1 ? ' · ' . $nUnit : '' ?>
                         </a>
                         <span class="ml-auto font-mono text-[11px] tracking-wider text-gray-400"><?= e($p['sku'] ?: '—') ?></span>
                     </div>
@@ -403,15 +454,41 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
         card.classList.toggle('border-gray-100', !box.checked);
     }
 
+    var modoEl  = document.getElementById('modo');
+    var copiasEl= document.getElementById('copias');
+    var totalEl = form.querySelector('[data-total-units]');
+
+    function byUnits() { return !modoEl || modoEl.value === 'unidades'; }
+
     function refresh() {
-        var n = form.querySelectorAll('[data-item]:checked').length;
+        var checked = form.querySelectorAll('[data-item]:checked');
+        var n = checked.length;
         items.forEach(paint);
-        if (count) count.textContent = n + (n === 1 ? ' seleccionado' : ' seleccionados');
+
+        if (count) {
+            var copies = Math.max(1, parseInt((copiasEl && copiasEl.value) || '1', 10) || 1);
+            var labels = 0;
+            checked.forEach(function (c) {
+                labels += byUnits() ? (parseInt(c.getAttribute('data-units'), 10) || 1) : 1;
+            });
+            labels *= copies;
+            count.textContent = n === 0
+                ? '0 seleccionados'
+                : n + (n === 1 ? ' seleccionado' : ' seleccionados') + ' · ' + labels + ' etiqueta' + (labels === 1 ? '' : 's');
+        }
+
+        if (totalEl) {
+            var t = parseInt(totalEl.getAttribute(byUnits() ? 'data-total-units' : 'data-total-prods'), 10) || 0;
+            totalEl.textContent = '(' + t + ' etiqueta' + (t === 1 ? '' : 's') + ')';
+        }
+
         if (all) {
             all.checked = n > 0 && n === items.length;
             all.indeterminate = n > 0 && n < items.length;
         }
     }
+    if (modoEl)   modoEl.addEventListener('change', refresh);
+    if (copiasEl) copiasEl.addEventListener('input', refresh);
     if (all) all.addEventListener('change', function () {
         items.forEach(function (i) { i.checked = all.checked; });
         refresh();

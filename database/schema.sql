@@ -20,6 +20,7 @@ DROP TABLE IF EXISTS `rental_items`;
 DROP TABLE IF EXISTS `rentals`;
 DROP TABLE IF EXISTS `rental_requests`;
 DROP TABLE IF EXISTS `sales`;
+DROP TABLE IF EXISTS `product_units`;
 DROP TABLE IF EXISTS `product_images`;
 DROP TABLE IF EXISTS `products`;
 DROP TABLE IF EXISTS `categories`;
@@ -168,6 +169,23 @@ CREATE TABLE `product_images` (
     PRIMARY KEY (`id`),
     KEY `idx_pi_product` (`product_id`),
     CONSTRAINT `fk_pi_product` FOREIGN KEY (`product_id`) REFERENCES `products`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Una fila por unidad física del producto (stock 10 = 10 filas = 10 etiquetas).
+CREATE TABLE `product_units` (
+    `id`          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `product_id`  INT UNSIGNED NOT NULL,
+    `unit_number` INT UNSIGNED NOT NULL,
+    `barcode`     VARCHAR(56) NOT NULL,
+    `status`      ENUM('available','reserved','rented','sold','maintenance','unavailable','retired') NOT NULL DEFAULT 'available',
+    `notes`       VARCHAR(255) NULL,
+    `created_at`  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at`  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uq_pu_product_number` (`product_id`, `unit_number`),
+    UNIQUE KEY `uq_pu_barcode` (`barcode`),
+    KEY `idx_pu_product` (`product_id`),
+    CONSTRAINT `fk_pu_product` FOREIGN KEY (`product_id`) REFERENCES `products`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================

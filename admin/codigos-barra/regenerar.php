@@ -23,7 +23,12 @@ if (!$product) {
 }
 
 $code = barcode_assign($id, true);
-log_activity('barcode.regenerate', 'product', $id, 'Regeneró el código de barras: ' . $code);
-flash('success', 'Código de barras regenerado: ' . $code);
+
+/* Los códigos de cada unidad cuelgan del maestro: se regeneran con él. */
+$units = barcode_units_sync($id, null, true);
+
+log_activity('barcode.regenerate', 'product', $id, 'Regeneró el código de barras: ' . $code . ' (' . $units['total'] . ' unidad/es)');
+flash('success', 'Código de barras regenerado: ' . $code
+    . ($units['total'] > 0 ? ' · ' . $units['total'] . ' código(s) de unidad actualizados.' : ''));
 
 back(admin_url('productos/ver.php?id=' . $id));

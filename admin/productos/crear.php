@@ -156,8 +156,40 @@ if (is_post()) {
             /* Código de barras automático (Code 128) */
             $newBarcode = barcode_assign($productId);
 
-            log_activity('product.create', 'product', $productId, 'Producto creado: ' . $form['name'] . ' · código ' . $newBarcode);
-            flash('success', 'Producto creado correctamente. Código de barras asignado: ' . $newBarcode);
+            /*
+             * Un código por UNIDAD física: si el stock es 10, se crean 10
+             * códigos (…U01 … …U10) para etiquetar cada traje por separado.
+             */
+            $qty   = max(0, (int) ($form['quantity'] !== '' ? $form['quantity'] : 1));
+            $units = barcode_units_sync($productId, $qty);
+
+            log_activity(
+                'product.create',
+                'product',
+                $productId,
+                'Producto creado: ' . $form['name'] . ' · código ' . $newBarcode
+                    . ' · ' . $units['total'] . ' unidad(es) con código propio'
+            );
+
+            if ($units['total'] > 1) {
+                flash('success', sprintf(
+                    'Producto creado. Se generaron %d códigos de barra, uno por unidad (%s … %s). Imprímalos desde la ficha o desde Códigos de barra.',
+                    $units['total'],
+                    barcode_unit_code($productId, 1),
+                    barcode_unit_code($productId, $units['total'])
+                ));
+            } elseif ($units['total'] === 1) {
+                flash('success', 'Producto creado correctamente. Código de la unidad: ' . barcode_unit_code($productId, 1) . ' (código maestro ' . $newBarcode . ').');
+            } else {
+                flash('success', 'Producto creado correctamente. Código de barras asignado: ' . $newBarcode . '. Al poner cantidad en stock se generará una etiqueta por unidad.');
+            }
+            if (!empty($units['capped'])) {
+                flash('warning', sprintf(
+                    'Se pidieron %d unidades y el máximo por producto es %d: se generaron %d códigos.',
+                    $units['requested'], barcode_units_max(), $units['total']
+                ));
+            }
+
             redirect(admin_url('productos/ver.php?id=' . $productId));
         }
     }
@@ -204,19 +236,28 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
                 </div>
             </div>
 
-            <!-- Código de barras automático -->
+            <!-- Códigos de barra automáticos (uno por unidad del stock) -->
             <div class="rounded-2xl border border-gray-100 bg-white p-6 shadow-soft">
                 <div class="mb-3 flex items-center justify-between">
-                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Código de barras</p>
+                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Códigos de barra</p>
                     <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">Automático</span>
                 </div>
                 <div class="rounded-xl border border-gray-100 bg-white px-3 py-3">
-                    <?= barcode_svg($nextBarcode, ['module' => 1.6, 'height' => 48]) ?>
+                    <?= barcode_svg($nextBarcode . 'U01', ['module' => 1.5, 'height' => 46]) ?>
                 </div>
-                <p class="mt-3 text-xs leading-relaxed text-gray-500">
-                    Al guardar, el sistema asignará el código
-                    <strong class="font-mono text-gray-800"><?= e($nextBarcode) ?></strong>
-                    (Code 128, legible por cualquier lector). Podrá imprimir su etiqueta desde
+
+                <p class="mt-3 text-sm leading-relaxed text-gray-600">
+                    Al guardar se generarán
+                    <strong class="text-gray-900" data-unit-count>1</strong>
+                    <span data-unit-word>código</span>: uno por cada unidad en stock, para poder
+                    pegarle su etiqueta a cada pieza.
+                </p>
+
+                <div class="mt-3 flex flex-wrap gap-1.5" data-unit-chips></div>
+
+                <p class="mt-3 border-t border-gray-50 pt-3 text-xs leading-relaxed text-gray-500">
+                    Código maestro del producto: <strong class="font-mono text-gray-800"><?= e($nextBarcode) ?></strong>.
+                    Code 128, legible por cualquier lector. Las etiquetas se imprimen desde
                     <a href="<?= admin_url('codigos-barra/index.php') ?>" class="font-medium text-brand-red hover:underline">Códigos de barra</a>.
                 </p>
             </div>
@@ -378,7 +419,12 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
 
                 <div>
                     <label class="lcn-label" for="quantity">Cantidad en stock</label>
-                    <input id="quantity" name="quantity" type="number" step="1" min="0" value="<?= e($form['quantity']) ?>" class="lcn-input">
+                    <input id="quantity" name="quantity" type="number" step="1" min="0" max="<?= barcode_units_max() ?>"
+                           value="<?= e($form['quantity']) ?>" class="lcn-input" data-live-quantity>
+                    <p class="mt-1.5 flex items-start gap-1.5 text-xs text-gray-500">
+                        <?= icon('tag', 'w-3.5 h-3.5 mt-0.5 shrink-0 text-brand-gold') ?>
+                        <span>Se creará <strong data-qty-echo>1</strong> código de barras distinto (uno por unidad). Máx. <?= barcode_units_max() ?>.</span>
+                    </p>
                 </div>
 
                 <div>
@@ -476,6 +522,49 @@ $lcnCurrency = setting('currency', 'RD$');
         if (el) { el.addEventListener('input', refresh); el.addEventListener('change', refresh); }
     });
     refresh();
+
+    /* ---- Previsualización de los códigos por unidad ---- */
+    var BASE    = <?= json_encode($nextBarcode) ?>;
+    var MAXU    = <?= (int) barcode_units_max() ?>;
+    var qtyEl   = document.querySelector('[data-live-quantity]');
+    var uCount  = document.querySelector('[data-unit-count]');
+    var uWord   = document.querySelector('[data-unit-word]');
+    var uChips  = document.querySelector('[data-unit-chips]');
+    var qtyEcho = document.querySelector('[data-qty-echo]');
+
+    function unitCode(n) {
+        return BASE + 'U' + (n < 10 ? '0' + n : String(n));
+    }
+    function refreshUnits() {
+        var n = parseInt((qtyEl && qtyEl.value) || '0', 10);
+        if (isNaN(n) || n < 0) n = 0;
+        if (n > MAXU) n = MAXU;
+
+        if (uCount)  uCount.textContent  = String(n);
+        if (uWord)   uWord.textContent   = n === 1 ? 'código' : 'códigos';
+        if (qtyEcho) qtyEcho.textContent = String(n);
+
+        if (!uChips) return;
+        uChips.innerHTML = '';
+        var shown = Math.min(n, 6);
+        for (var i = 1; i <= shown; i++) {
+            var s = document.createElement('span');
+            s.className = 'inline-flex items-center rounded-lg bg-gray-100 px-2 py-1 font-mono text-[11px] tracking-wider text-gray-600';
+            s.textContent = unitCode(i);
+            uChips.appendChild(s);
+        }
+        if (n > shown) {
+            var more = document.createElement('span');
+            more.className = 'inline-flex items-center rounded-lg bg-brand-red/10 px-2 py-1 text-[11px] font-semibold text-brand-red';
+            more.textContent = '+' + (n - shown) + ' más · hasta ' + unitCode(n);
+            uChips.appendChild(more);
+        }
+    }
+    if (qtyEl) {
+        qtyEl.addEventListener('input', refreshUnits);
+        qtyEl.addEventListener('change', refreshUnits);
+    }
+    refreshUnits();
 })();
 </script>
 

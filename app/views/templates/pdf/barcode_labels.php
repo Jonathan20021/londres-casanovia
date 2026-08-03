@@ -4,7 +4,8 @@
  * LONDRES Casa de Novias
  *
  * Variables esperadas:
- *   $labels     array de ['name','code','sku','size','color','category','price']
+ *   $labels     array de ['name','code','unit','sku','size','color','category','price']
+ *               'unit' = "Unidad 3 de 10" cuando la etiqueta es de una pieza concreta
  *   $layout     ['key','label','cols','rows','w','h','name_max','bar_h','font']
  *   $business   settings_all()
  *   $showHeader bool  — banda de marca en la primera página
@@ -74,6 +75,7 @@ $cut = static function (?string $s, int $max): string {
   .lbl .rule { height:1pt; background:<?= e($gold) ?>; width:34%; margin:1mm auto 1.2mm; }
   .lbl .nm { font-size:<?= (float) $layout['font'] ?>pt; font-weight:bold; line-height:1.15; color:#1a1a1d; }
   .lbl .at { font-size:<?= (float) $layout['font'] - 1.2 ?>pt; color:#6b6b70; margin-top:0.6mm; }
+  .lbl .un { font-size:<?= (float) $layout['font'] - 1.1 ?>pt; font-weight:bold; color:<?= e($primary) ?>; margin-top:0.5mm; letter-spacing:0.3px; }
   .lbl .pr { font-size:<?= (float) $layout['font'] + 0.6 ?>pt; font-weight:bold; color:<?= e($primary) ?>; margin-top:0.6mm; }
   .lbl .bc { margin-top:1.2mm; }
   .lbl .code { font-family:'DejaVu Sans Mono',monospace; font-size:<?= (float) $layout['font'] - 0.6 ?>pt; letter-spacing:1.4px; margin-top:0.4mm; color:#0B0B0C; }
@@ -122,7 +124,12 @@ $cut = static function (?string $s, int $max): string {
                             <div class="rule"></div>
                             <div class="nm"><?= e($cut($l['name'] ?? '', (int) $layout['name_max'])) ?></div>
                             <?php
+                            /* En la etiqueta pequeña no cabe una línea extra: la unidad
+                               viaja junto al resto de atributos. */
+                            $unit  = trim((string) ($l['unit'] ?? ''));
+                            $tiny  = (int) $layout['cols'] >= 4;
                             $attrs = array_filter([
+                                $tiny && $unit !== '' ? $unit : '',
                                 $l['size']  ? 'Talla ' . $l['size'] : '',
                                 $l['color'] ?: '',
                                 $l['sku']   ? 'SKU ' . $l['sku'] : '',
@@ -130,6 +137,9 @@ $cut = static function (?string $s, int $max): string {
                             ?>
                             <?php if ($attrs): ?>
                                 <div class="at"><?= e($cut(implode(' · ', $attrs), (int) $layout['name_max'])) ?></div>
+                            <?php endif; ?>
+                            <?php if (!$tiny && $unit !== ''): ?>
+                                <div class="un"><?= e($unit) ?></div>
                             <?php endif; ?>
                             <?php if (!empty($l['price'])): ?>
                                 <div class="pr"><?= e($l['price']) ?></div>

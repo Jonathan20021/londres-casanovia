@@ -157,8 +157,30 @@ if (is_post()) {
             }
         }
 
+        /*
+         * Un código de barras por unidad física: al cambiar la cantidad en
+         * stock se crean las etiquetas que faltan (o se retiran las sobrantes).
+         */
+        $qty   = max(0, (int) ($form['quantity'] !== '' ? $form['quantity'] : 1));
+        $units = barcode_units_sync($id, $qty);
+
         log_activity('product.update', 'product', $id, 'Producto actualizado: ' . $form['name']);
         flash('success', 'Producto actualizado correctamente.');
+
+        if ($units['created'] > 0 || $units['removed'] > 0) {
+            $parts = [];
+            if ($units['created'] > 0) $parts[] = 'se generaron ' . $units['created'] . ' código(s) nuevo(s)';
+            if ($units['removed'] > 0) $parts[] = 'se retiraron ' . $units['removed'] . ' código(s) sobrante(s)';
+            flash('info', 'Unidades ajustadas a la cantidad en stock: ' . implode(' y ', $parts)
+                . '. Total: ' . $units['total'] . ' etiqueta(s).');
+        }
+        if (!empty($units['capped'])) {
+            flash('warning', sprintf(
+                'Se pidieron %d unidades y el máximo por producto es %d: hay %d códigos.',
+                $units['requested'], barcode_units_max(), $units['total']
+            ));
+        }
+
         redirect(admin_url('productos/ver.php?id=' . $id));
     }
 
@@ -175,6 +197,10 @@ $productBarcode = (string) ($product['barcode'] ?? '');
 if ($productBarcode === '') {
     $productBarcode = barcode_assign($id);
 }
+
+/* Unidades físicas: se ponen al día con la cantidad en stock actual */
+barcode_units_sync($id);
+$units = barcode_units($id);
 
 $page_title    = 'Editar producto';
 $page_subtitle = $product['name'];
@@ -207,18 +233,38 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
                 </div>
             </div>
 
-            <!-- Código de barras -->
+            <!-- Códigos de barra (uno por unidad) -->
             <div class="rounded-2xl border border-gray-100 bg-white p-6 shadow-soft">
                 <div class="mb-3 flex items-center justify-between">
-                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Código de barras</p>
+                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Códigos de barra</p>
                     <span class="font-mono text-[11px] tracking-widest text-gray-500"><?= e($productBarcode) ?></span>
                 </div>
                 <div class="rounded-xl border border-gray-100 px-3 py-3">
-                    <?= barcode_svg($productBarcode, ['module' => 1.6, 'height' => 48]) ?>
+                    <?= barcode_svg($units ? (string) $units[0]['barcode'] : $productBarcode, ['module' => 1.6, 'height' => 48]) ?>
                 </div>
-                <a href="<?= admin_url('codigos-barra/exportar.php?ids=' . $id) ?>"
+
+                <p class="mt-3 text-sm text-gray-600">
+                    <strong class="text-gray-900"><?= count($units) ?></strong>
+                    unidad<?= count($units) === 1 ? '' : 'es' ?> con código propio.
+                    <span class="text-gray-400">Cambie la cantidad en stock para ajustarlas.</span>
+                </p>
+
+                <?php if ($units): ?>
+                    <div class="mt-3 max-h-40 space-y-1 overflow-y-auto pr-1">
+                        <?php foreach ($units as $u): ?>
+                            <div class="flex items-center justify-between rounded-lg bg-gray-50/70 px-2.5 py-1.5">
+                                <span class="text-[11px] font-medium text-gray-500">Unidad <?= (int) $u['unit_number'] ?></span>
+                                <span class="font-mono text-[11px] tracking-wider text-gray-700"><?= e((string) $u['barcode']) ?></span>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+
+                <p class="mt-3 hidden rounded-lg bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-800" data-unit-warning></p>
+
+                <a href="<?= admin_url('codigos-barra/exportar.php?ids=' . $id . '&modo=unidades') ?>"
                    class="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 transition hover:bg-gray-50">
-                    <?= icon('printer', 'w-4 h-4') ?> Imprimir etiqueta
+                    <?= icon('printer', 'w-4 h-4') ?> Imprimir <?= count($units) > 1 ? count($units) . ' etiquetas' : 'etiqueta' ?>
                 </a>
             </div>
 
@@ -399,7 +445,12 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
 
                 <div>
                     <label class="lcn-label" for="quantity">Cantidad en stock</label>
-                    <input id="quantity" name="quantity" type="number" step="1" min="0" value="<?= e($form['quantity']) ?>" class="lcn-input">
+                    <input id="quantity" name="quantity" type="number" step="1" min="0" max="<?= barcode_units_max() ?>"
+                           value="<?= e($form['quantity']) ?>" class="lcn-input" data-live-quantity>
+                    <p class="mt-1.5 flex items-start gap-1.5 text-xs text-gray-500">
+                        <?= icon('tag', 'w-3.5 h-3.5 mt-0.5 shrink-0 text-brand-gold') ?>
+                        <span>Un código de barras por unidad. Ahora hay <strong><?= count($units) ?></strong>. Máx. <?= barcode_units_max() ?>.</span>
+                    </p>
                 </div>
 
                 <div>
@@ -493,6 +544,31 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
         if (el) { el.addEventListener('input', refresh); el.addEventListener('change', refresh); }
     });
     refresh();
+
+    /* ---- Aviso en vivo al cambiar la cantidad (unidades = etiquetas) ---- */
+    var CURRENT = <?= (int) count($units) ?>;
+    var MAXU    = <?= (int) barcode_units_max() ?>;
+    var qtyEl   = document.querySelector('[data-live-quantity]');
+    var warnEl  = document.querySelector('[data-unit-warning]');
+
+    function refreshUnits() {
+        if (!qtyEl || !warnEl) return;
+        var n = parseInt(qtyEl.value || '0', 10);
+        if (isNaN(n) || n < 0) n = 0;
+        if (n > MAXU) n = MAXU;
+
+        var diff = n - CURRENT;
+        if (diff === 0) { warnEl.classList.add('hidden'); return; }
+        warnEl.classList.remove('hidden');
+        warnEl.textContent = diff > 0
+            ? 'Al guardar se generarán ' + diff + ' código(s) nuevo(s): habrá ' + n + ' en total.'
+            : 'Al guardar se retirarán ' + Math.abs(diff) + ' código(s): quedarán ' + n + '.';
+    }
+    if (qtyEl) {
+        qtyEl.addEventListener('input', refreshUnits);
+        qtyEl.addEventListener('change', refreshUnits);
+    }
+    refreshUnits();
 })();
 </script>
 
