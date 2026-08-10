@@ -160,6 +160,11 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
                                     <?= icon('tag', 'w-3.5 h-3.5') ?>
                                     Unidad <?= (int) $scanned['unit_number'] ?><?= !empty($scanned['unit_total']) ? ' de ' . (int) $scanned['unit_total'] : '' ?>
                                 </span>
+                                <?php if (!empty($scanned['unit_size'])): ?>
+                                    <span class="inline-flex items-center gap-1 rounded-full bg-brand-dark px-2.5 py-1 text-xs font-semibold text-white">
+                                        Talla <?= e((string) $scanned['unit_size']) ?>
+                                    </span>
+                                <?php endif; ?>
                             <?php endif; ?>
                             <?= status_badge($scanned['commercial_status'], 'commercial') ?>
                         </div>

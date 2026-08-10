@@ -80,6 +80,16 @@ los archivos y dejar el sitio en línea.
    la cantidad en stock de cada producto. Las etiquetas ya impresas (código maestro) siguen siendo
    válidas: el escáner las reconoce igual.
 
+10. ⚠️ **ACTUALIZACIÓN 2026‑08‑10 — talla por unidad.** Ejecute
+   [`database/migrations/2026_08_10_unit_sizes.sql`](database/migrations/2026_08_10_unit_sizes.sql)
+   (después de la del punto 9). Añade `product_units.size` y amplía `products.size` a 120
+   caracteres, porque pasa a ser el **resumen** de las tallas de las unidades (`S · M · L`).
+   Las unidades ya existentes heredan la talla que tuviera su producto.
+
+   Así, un traje con *Cantidad en stock* = 5 puede registrarse con 5 tallas distintas, cada una
+   con su código de barras; el catálogo público muestra "Tallas disponibles" y el filtro de talla
+   encuentra el producto por cualquiera de ellas.
+
 ## 4. Acceso
 
 | URL | Descripción |

@@ -129,8 +129,12 @@ if ($modo === 'unidades') {
     /* Pone al día las unidades que no coincidan con su cantidad en stock. */
     barcode_units_backfill();
 
+    /* La talla de la unidad manda sobre la del producto (que es un resumen) */
+    $unitSizeSql = barcode_unit_sizes_enabled() ? 'u.size AS unit_size,' : "'' AS unit_size,";
+
     $rows = db_all(
         'SELECT u.id AS unit_id, u.unit_number, u.barcode AS unit_barcode, u.product_id,
+                ' . $unitSizeSql . '
                 p.id, p.name, p.sku, p.size, p.color, p.rental_price, p.sale_price, p.type,
                 c.name AS category_name,
                 (SELECT COUNT(*) FROM product_units x WHERE x.product_id = p.id) AS unit_total
@@ -148,6 +152,17 @@ if ($modo === 'unidades') {
         $unit  = $total > 1
             ? 'Unidad ' . (int) $r['unit_number'] . ' de ' . $total
             : '';
+
+        /*
+         * Talla impresa: la de la pieza. Si esta unidad no la tiene y el
+         * producto guarda un resumen ("S · M · L"), se deja en blanco antes
+         * que mentir en la etiqueta.
+         */
+        $unitSize = trim((string) ($r['unit_size'] ?? ''));
+        $r['size'] = $unitSize !== ''
+            ? $unitSize
+            : (str_contains((string) ($r['size'] ?? ''), '·') ? '' : (string) ($r['size'] ?? ''));
+
         $label = $makeLabel($r, (string) $r['unit_barcode'], $unit);
         for ($i = 0; $i < $copies; $i++) {
             $labels[] = $label;

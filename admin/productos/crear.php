@@ -37,8 +37,16 @@ $form = [
 /* ------------------------------------------------------------------ *
  *  Manejo POST
  * ------------------------------------------------------------------ */
+/* Tallas escritas por unidad: [nº de unidad => talla] */
+$unitSizes = [];
+
 if (is_post()) {
     require_csrf();
+
+    foreach ((array) post('unit_sizes', []) as $n => $s) {
+        $n = (int) $n;
+        if ($n > 0) $unitSizes[$n] = trim((string) $s);
+    }
 
     /* Recoger campos */
     foreach ($form as $k => $_) {
@@ -162,6 +170,9 @@ if (is_post()) {
              */
             $qty   = max(0, (int) ($form['quantity'] !== '' ? $form['quantity'] : 1));
             $units = barcode_units_sync($productId, $qty);
+
+            /* Talla de cada unidad (del mismo modelo puede haber varias tallas) */
+            product_units_apply_sizes($productId, $unitSizes);
 
             log_activity(
                 'product.create',
@@ -392,8 +403,9 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
                 </div>
 
                 <div>
-                    <label class="lcn-label" for="size">Talla</label>
+                    <label class="lcn-label" for="size">Talla general</label>
                     <input id="size" name="size" type="text" value="<?= e($form['size']) ?>" class="lcn-input" data-live-size placeholder="Ej. M / 8 / 38">
+                    <p class="mt-1.5 text-xs text-gray-500">Si registra tallas por unidad más abajo, este campo se completa solo con todas ellas.</p>
                 </div>
 
                 <div>
@@ -469,6 +481,13 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
                 </div>
             </div>
         </div>
+
+        <!-- Tallas por unidad (se sincroniza con "Cantidad en stock") -->
+        <?php
+        $unitSizeInit = $unitSizes;
+        $unitSizeBase = $nextBarcode;
+        require LCN_ROOT . '/app/views/components/unit_sizes.php';
+        ?>
     </div>
 </form>
 

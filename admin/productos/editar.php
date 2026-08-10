@@ -45,8 +45,16 @@ $form = [
 /* ------------------------------------------------------------------ *
  *  Manejo POST (actualizar datos + nuevas imágenes)
  * ------------------------------------------------------------------ */
+/* Tallas escritas por unidad: [nº de unidad => talla] */
+$unitSizes = [];
+
 if (is_post()) {
     require_csrf();
+
+    foreach ((array) post('unit_sizes', []) as $n => $s) {
+        $n = (int) $n;
+        if ($n > 0) $unitSizes[$n] = trim((string) $s);
+    }
 
     foreach ($form as $k => $_) {
         if (in_array($k, ['is_unique', 'featured', 'is_complement'], true)) {
@@ -164,6 +172,9 @@ if (is_post()) {
         $qty   = max(0, (int) ($form['quantity'] !== '' ? $form['quantity'] : 1));
         $units = barcode_units_sync($id, $qty);
 
+        /* Talla de cada unidad (del mismo modelo puede haber varias tallas) */
+        product_units_apply_sizes($id, $unitSizes);
+
         log_activity('product.update', 'product', $id, 'Producto actualizado: ' . $form['name']);
         flash('success', 'Producto actualizado correctamente.');
 
@@ -201,6 +212,11 @@ if ($productBarcode === '') {
 /* Unidades físicas: se ponen al día con la cantidad en stock actual */
 barcode_units_sync($id);
 $units = barcode_units($id);
+
+/* Tallas a mostrar: las tecleadas si el POST falló, si no las guardadas */
+if (!$unitSizes) {
+    $unitSizes = product_unit_sizes($id);
+}
 
 $page_title    = 'Editar producto';
 $page_subtitle = $product['name'];
@@ -252,9 +268,14 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
                 <?php if ($units): ?>
                     <div class="mt-3 max-h-40 space-y-1 overflow-y-auto pr-1">
                         <?php foreach ($units as $u): ?>
-                            <div class="flex items-center justify-between rounded-lg bg-gray-50/70 px-2.5 py-1.5">
-                                <span class="text-[11px] font-medium text-gray-500">Unidad <?= (int) $u['unit_number'] ?></span>
-                                <span class="font-mono text-[11px] tracking-wider text-gray-700"><?= e((string) $u['barcode']) ?></span>
+                            <div class="flex items-center justify-between gap-2 rounded-lg bg-gray-50/70 px-2.5 py-1.5">
+                                <span class="shrink-0 text-[11px] font-medium text-gray-500">
+                                    Unidad <?= (int) $u['unit_number'] ?>
+                                    <?php if (!empty($u['size'])): ?>
+                                        <span class="ml-1 rounded bg-brand-red/10 px-1.5 py-0.5 font-semibold text-brand-red">Talla <?= e((string) $u['size']) ?></span>
+                                    <?php endif; ?>
+                                </span>
+                                <span class="truncate font-mono text-[11px] tracking-wider text-gray-700"><?= e((string) $u['barcode']) ?></span>
                             </div>
                         <?php endforeach; ?>
                     </div>
@@ -418,8 +439,9 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
                 </div>
 
                 <div>
-                    <label class="lcn-label" for="size">Talla</label>
+                    <label class="lcn-label" for="size">Talla general</label>
                     <input id="size" name="size" type="text" value="<?= e($form['size']) ?>" class="lcn-input" data-live-size>
+                    <p class="mt-1.5 text-xs text-gray-500">Si registra tallas por unidad más abajo, este campo se completa solo con todas ellas.</p>
                 </div>
 
                 <div>
@@ -494,6 +516,13 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
                 </div>
             </div>
         </div>
+
+        <!-- Tallas por unidad (se sincroniza con "Cantidad en stock") -->
+        <?php
+        $unitSizeInit = $unitSizes;
+        $unitSizeBase = $productBarcode;
+        require LCN_ROOT . '/app/views/components/unit_sizes.php';
+        ?>
     </div>
 </form>
 

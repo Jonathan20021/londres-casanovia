@@ -60,7 +60,11 @@ if ($type !== '') {
     $params['type']     = $type;
 }
 if ($size !== '') {
-    $where[]            = 'p.size = :size';
+    /* La talla puede estar en el producto o en una de sus unidades: del mismo
+       modelo hay varias piezas y cada una tiene la suya. */
+    $where[] = barcode_unit_sizes_enabled()
+        ? '(p.size = :size OR EXISTS (SELECT 1 FROM product_units pu WHERE pu.product_id = p.id AND pu.size = :size))'
+        : 'p.size = :size';
     $params['size']     = $size;
 }
 if ($color !== '') {
@@ -150,7 +154,17 @@ $products = db_all(
  *  Datos auxiliares para los selects de filtro
  * ------------------------------------------------------------------ */
 $categories = db_all("SELECT id, name FROM categories WHERE status = 'active' ORDER BY name ASC");
-$sizes      = db_all("SELECT DISTINCT size  FROM products WHERE status='active' AND size  IS NOT NULL AND size  <> '' ORDER BY size  ASC");
+/* Tallas del filtro: las de cada unidad + las de productos con una sola talla
+   (se descarta el resumen "S · M · L", que no sirve como opción). */
+$sizes      = barcode_unit_sizes_enabled()
+    ? db_all("SELECT DISTINCT pu.size AS size
+              FROM product_units pu JOIN products p ON p.id = pu.product_id
+              WHERE p.status='active' AND pu.size IS NOT NULL AND pu.size <> ''
+              UNION
+              SELECT DISTINCT size FROM products
+              WHERE status='active' AND size IS NOT NULL AND size <> '' AND size NOT LIKE '%·%'
+              ORDER BY size ASC")
+    : db_all("SELECT DISTINCT size  FROM products WHERE status='active' AND size  IS NOT NULL AND size  <> '' ORDER BY size  ASC");
 $colors     = db_all("SELECT DISTINCT color FROM products WHERE status='active' AND color IS NOT NULL AND color <> '' ORDER BY color ASC");
 
 // ¿Hay filtros activos? (para mostrar el botón "Limpiar")

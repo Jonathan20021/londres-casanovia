@@ -136,7 +136,7 @@ CREATE TABLE `products` (
     `sale_price`        DECIMAL(12,2) NULL,
     `cost_price`        DECIMAL(12,2) NULL,
     `deposit_amount`    DECIMAL(12,2) NOT NULL DEFAULT 0.00,
-    `size`              VARCHAR(40) NULL,
+    `size`              VARCHAR(120) NULL,   -- resumen de las tallas de sus unidades ("S · M · L")
     `color`             VARCHAR(60) NULL,
     `material`          VARCHAR(80) NULL,
     `condition_status`  ENUM('new','excellent','good','repair','out_of_service') NOT NULL DEFAULT 'excellent',
@@ -176,6 +176,7 @@ CREATE TABLE `product_units` (
     `id`          INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `product_id`  INT UNSIGNED NOT NULL,
     `unit_number` INT UNSIGNED NOT NULL,
+    `size`        VARCHAR(40) NULL,
     `barcode`     VARCHAR(56) NOT NULL,
     `status`      ENUM('available','reserved','rented','sold','maintenance','unavailable','retired') NOT NULL DEFAULT 'available',
     `notes`       VARCHAR(255) NULL,
@@ -185,6 +186,7 @@ CREATE TABLE `product_units` (
     UNIQUE KEY `uq_pu_product_number` (`product_id`, `unit_number`),
     UNIQUE KEY `uq_pu_barcode` (`barcode`),
     KEY `idx_pu_product` (`product_id`),
+    KEY `idx_pu_size` (`size`),
     CONSTRAINT `fk_pu_product` FOREIGN KEY (`product_id`) REFERENCES `products`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

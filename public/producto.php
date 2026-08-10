@@ -117,6 +117,20 @@ $conditionLabels = [
 ];
 $conditionLabel = $conditionLabels[$product['condition_status']] ?? $product['condition_status'];
 
+/*
+ * Tallas disponibles: del mismo modelo puede haber varias piezas, cada una
+ * con su talla. Se muestran como chips y, si hay más de una pieza de la
+ * misma talla, se indica cuántas.
+ */
+$sizeList   = product_sizes_list((int) $product['id']);
+$sizeCounts = [];
+if ($sizeList) {
+    foreach (barcode_units((int) $product['id']) as $u) {
+        $s = trim((string) ($u['size'] ?? ''));
+        if ($s !== '') $sizeCounts[$s] = ($sizeCounts[$s] ?? 0) + 1;
+    }
+}
+
 /* ------------------------------------------------------------------ *
  *  Productos similares (misma categoría, activos, distintos)
  * ------------------------------------------------------------------ */
@@ -252,11 +266,29 @@ require LCN_ROOT . '/app/views/layouts/public_header.php';
                 <?php endforeach; ?>
             </div>
 
+            <!-- Tallas disponibles (una pieza por talla) -->
+            <?php if (count($sizeList) > 1): ?>
+                <div class="mt-6 rounded-2xl border border-gray-100 bg-white p-4">
+                    <p class="text-xs font-medium uppercase tracking-wide text-gray-400">Tallas disponibles</p>
+                    <div class="mt-2 flex flex-wrap gap-2">
+                        <?php foreach ($sizeList as $s): $n = $sizeCounts[$s] ?? 1; ?>
+                            <span class="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-1.5 text-sm font-semibold text-brand-dark">
+                                <?= e($s) ?>
+                                <?php if ($n > 1): ?>
+                                    <span class="rounded-full bg-brand-red/10 px-1.5 text-xs font-bold text-brand-red"><?= (int) $n ?></span>
+                                <?php endif; ?>
+                            </span>
+                        <?php endforeach; ?>
+                    </div>
+                    <p class="mt-2 text-xs text-gray-400">Consúltanos para reservar la talla que necesitas.</p>
+                </div>
+            <?php endif; ?>
+
             <!-- Ficha técnica -->
             <dl class="mt-6 grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3">
                 <?php
                 $specs = [
-                    ['Talla',    $product['size']],
+                    ['Talla', count($sizeList) > 1 ? null : ($sizeList[0] ?? $product['size'])],
                     ['Color',    $product['color']],
                     ['Material', $product['material']],
                     ['Condición', $conditionLabel],

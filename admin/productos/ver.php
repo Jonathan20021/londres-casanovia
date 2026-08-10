@@ -254,8 +254,13 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <?php foreach ($units as $u): ?>
                         <div class="rounded-xl border border-gray-100 p-3">
-                            <div class="mb-2 flex items-center justify-between">
-                                <span class="text-xs font-semibold text-gray-700">Unidad <?= (int) $u['unit_number'] ?> <span class="font-normal text-gray-400">de <?= count($units) ?></span></span>
+                            <div class="mb-2 flex items-center justify-between gap-2">
+                                <span class="min-w-0 truncate text-xs font-semibold text-gray-700">
+                                    Unidad <?= (int) $u['unit_number'] ?> <span class="font-normal text-gray-400">de <?= count($units) ?></span>
+                                    <?php if (!empty($u['size'])): ?>
+                                        <span class="ml-1 rounded bg-brand-red/10 px-1.5 py-0.5 text-[11px] font-bold text-brand-red">Talla <?= e((string) $u['size']) ?></span>
+                                    <?php endif; ?>
+                                </span>
                                 <a href="<?= admin_url('codigos-barra/exportar.php?unit_ids=' . (int) $u['id']) ?>"
                                    class="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2 py-1 text-[11px] font-medium text-gray-600 transition hover:bg-gray-50">
                                     <?= icon('printer', 'w-3.5 h-3.5') ?> PDF

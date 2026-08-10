@@ -303,6 +303,12 @@ function barcode_units_sync(int $productId, ?int $quantity = null, bool $force =
     }
 
     $out['total'] = $target;
+
+    /* Al añadir o quitar piezas cambian las tallas disponibles del producto. */
+    if ($out['created'] > 0 || $out['removed'] > 0) {
+        product_size_summary_refresh($productId);
+    }
+
     return $out;
 }
 
@@ -326,6 +332,126 @@ function barcode_units_backfill(): int
         $created += $res['created'];
     }
     return $created;
+}
+
+/* ------------------------------------------------------------------ *
+ *  TALLAS POR UNIDAD
+ *
+ *  Del mismo traje (mismo color, mismo diseño) puede haber varias tallas.
+ *  Cada unidad guarda la suya y `products.size` queda como resumen legible
+ *  ("S · M · L"), que es lo que ya muestran el catálogo y los listados.
+ * ------------------------------------------------------------------ */
+
+/** ¿La tabla product_units ya tiene la columna size? (evita fallos pre-migración) */
+function barcode_unit_sizes_enabled(): bool
+{
+    static $exists = null;
+    if ($exists !== null) return $exists;
+    if (!barcode_units_enabled()) return $exists = false;
+    try {
+        $exists = db_one("SHOW COLUMNS FROM product_units LIKE 'size'") !== null;
+    } catch (Throwable $e) {
+        $exists = false;
+    }
+    return $exists;
+}
+
+/** Tallas de un producto indexadas por número de unidad: [1 => 'S', 2 => 'M', …] */
+function product_unit_sizes(int $productId): array
+{
+    if (!barcode_unit_sizes_enabled()) return [];
+    $out = [];
+    foreach (barcode_units($productId) as $u) {
+        $out[(int) $u['unit_number']] = (string) ($u['size'] ?? '');
+    }
+    return $out;
+}
+
+/**
+ * Lista de tallas distintas de un producto, en el orden en que aparecen.
+ * Es lo que se enseña al cliente ("Tallas disponibles: S, M, L").
+ */
+function product_sizes_list(int $productId): array
+{
+    if (!barcode_unit_sizes_enabled()) return [];
+    $rows = db_all(
+        'SELECT size FROM product_units
+         WHERE product_id = :id AND size IS NOT NULL AND size <> ""
+         ORDER BY unit_number ASC',
+        ['id' => $productId]
+    );
+    $out = [];
+    foreach ($rows as $r) {
+        $s = trim((string) $r['size']);
+        if ($s !== '' && !in_array($s, $out, true)) $out[] = $s;
+    }
+    return $out;
+}
+
+/**
+ * Recalcula products.size a partir de las tallas de las unidades.
+ * Si ninguna unidad tiene talla, respeta lo que el usuario escribió a mano —
+ * salvo que ahí hubiera quedado un resumen viejo, que sí se limpia.
+ */
+function product_size_summary_refresh(int $productId): ?string
+{
+    $sizes = product_sizes_list($productId);
+
+    if (!$sizes) {
+        $current = (string) (db_value('SELECT size FROM products WHERE id = :id', ['id' => $productId]) ?? '');
+        if (str_contains($current, '·')) {
+            db_update('products', ['size' => null], 'id = :id', ['id' => $productId]);
+        }
+        return null;
+    }
+
+    $summary = implode(' · ', $sizes);
+    if (mb_strlen($summary) > 120) {                    // products.size = VARCHAR(120)
+        $summary = mb_substr($summary, 0, 117) . '…';
+    }
+    db_update('products', ['size' => $summary], 'id = :id', ['id' => $productId]);
+    return $summary;
+}
+
+/**
+ * Guarda las tallas enviadas por el formulario ([nº de unidad => talla]) y
+ * actualiza el resumen del producto. Devuelve cuántas unidades cambiaron.
+ */
+function product_units_apply_sizes(int $productId, array $sizes): int
+{
+    if (!barcode_unit_sizes_enabled()) return 0;
+
+    $changed = 0;
+    foreach (barcode_units($productId) as $u) {
+        $n = (int) $u['unit_number'];
+        if (!array_key_exists($n, $sizes)) continue;
+
+        $new = mb_substr(trim((string) $sizes[$n]), 0, 40);
+        if ($new === (string) ($u['size'] ?? '')) continue;
+
+        db_update('product_units', ['size' => $new !== '' ? $new : null], 'id = :id', ['id' => (int) $u['id']]);
+        $changed++;
+    }
+
+    if ($changed > 0) product_size_summary_refresh($productId);
+    return $changed;
+}
+
+/** Tallas ya usadas en el inventario — alimenta el <datalist> de los formularios. */
+function product_sizes_catalog(): array
+{
+    $out = [];
+    if (barcode_unit_sizes_enabled()) {
+        foreach (db_all('SELECT DISTINCT size FROM product_units WHERE size IS NOT NULL AND size <> "" ORDER BY size ASC') as $r) {
+            $out[] = (string) $r['size'];
+        }
+    }
+    foreach (db_all('SELECT DISTINCT size FROM products WHERE size IS NOT NULL AND size <> "" ORDER BY size ASC') as $r) {
+        $s = (string) $r['size'];
+        if (!str_contains($s, '·') && !in_array($s, $out, true)) $out[] = $s;
+    }
+    sort($out, SORT_NATURAL | SORT_FLAG_CASE);
+    return $out;
 }
 
 /** Busca la unidad física correspondiente a un código leído. */
@@ -367,6 +493,7 @@ function barcode_lookup(string $raw): ?array
             $row['unit_number']  = (int) $unit['unit_number'];
             $row['unit_barcode'] = (string) $unit['barcode'];
             $row['unit_status']  = (string) $unit['status'];
+            $row['unit_size']    = (string) ($unit['size'] ?? '');
             $row['unit_total']   = barcode_units_count((int) $unit['product_id']);
             return $row;
         }
