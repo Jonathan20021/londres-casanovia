@@ -50,8 +50,12 @@ if (!in_array($modo, ['unidades', 'producto'], true)) $modo = 'unidades';
 $where  = [];
 $params = [];
 if ($q !== '') {
-    $where[] = '(p.name LIKE :q OR p.sku LIKE :q OR p.barcode LIKE :q OR p.color LIKE :q)';
-    $params['q'] = '%' . $q . '%';
+    // Incluye el código de la unidad física (…U03) y las lecturas parciales.
+    $search = product_search_clause($q);
+    if ($search['sql'] !== '') {
+        $where[] = $search['sql'];
+        $params += $search['params'];
+    }
 }
 if ($categoryId > 0)   { $where[] = 'p.category_id = :cat'; $params['cat']  = $categoryId; }
 if ($type !== '')      { $where[] = 'p.type = :type';       $params['type'] = $type; }

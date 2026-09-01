@@ -29,12 +29,14 @@ $where  = [];
 $params = [];
 
 if ($q !== '') {
+    // La pieza también se busca por el código cosido de su unidad física.
+    $search = product_search_clause($q, 'pq');
     $where[] = '(r.rental_number LIKE :q OR c.full_name LIKE :q OR EXISTS (
         SELECT 1 FROM rental_items riq
         JOIN products pq ON pq.id = riq.product_id
-        WHERE riq.rental_id = r.id AND (pq.name LIKE :q OR pq.sku LIKE :q OR pq.barcode LIKE :q)
+        WHERE riq.rental_id = r.id AND ' . $search['sql'] . '
     ))';
-    $params['q'] = '%' . $q . '%';
+    $params += $search['params'];
 }
 if ($rentalStatus !== '' && in_array($rentalStatus, $rentalStatuses, true)) {
     $where[] = 'r.rental_status = :rs';

@@ -69,8 +69,11 @@ if ($unitIds) {
     $comStatus  = (string) $param('commercial_status');
 
     if ($q !== '') {
-        $where[] = '(p.name LIKE :q OR p.sku LIKE :q OR p.barcode LIKE :q OR p.color LIKE :q)';
-        $params['q'] = '%' . $q . '%';
+        $search = product_search_clause($q);
+        if ($search['sql'] !== '') {
+            $where[] = $search['sql'];
+            $params += $search['params'];
+        }
     }
     if ($categoryId > 0)   { $where[] = 'p.category_id = :cat';      $params['cat']  = $categoryId; }
     if (in_array($type, ['rental', 'sale', 'both'], true)) { $where[] = 'p.type = :type'; $params['type'] = $type; }

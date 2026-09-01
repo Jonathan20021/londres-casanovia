@@ -575,6 +575,85 @@ function barcode_lookup(string $raw): ?array
     return null;
 }
 
+/**
+ * Códigos de unidad agrupados por producto, listos para indexar en JS.
+ *
+ * Devuelve [product_id => [['n' => 1, 'code' => 'LCN000042U01', 'size' => 'M',
+ * 'status' => 'available'], ...]]. Sin la tabla product_units devuelve [].
+ */
+function barcode_units_by_product(array $productIds): array
+{
+    if (!barcode_units_enabled()) return [];
+
+    $ids = array_values(array_unique(array_filter(array_map('intval', $productIds))));
+    if (!$ids) return [];
+
+    // IDs ya normalizados a int: se interpolan porque IN(...) no admite un
+    // único placeholder con el driver emulado.
+    $rows = db_all(
+        'SELECT product_id, unit_number, barcode, size, status
+           FROM product_units
+          WHERE product_id IN (' . implode(',', $ids) . ')
+          ORDER BY product_id ASC, unit_number ASC'
+    );
+
+    $map = [];
+    foreach ($rows as $row) {
+        $map[(int) $row['product_id']][] = [
+            'n'      => (int) $row['unit_number'],
+            'code'   => (string) $row['barcode'],
+            'size'   => (string) ($row['size'] ?? ''),
+            'status' => (string) $row['status'],
+        ];
+    }
+    return $map;
+}
+
+/**
+ * Cláusula WHERE para buscar productos por texto libre O por código escaneado.
+ *
+ * Cubre nombre / SKU / color / código maestro y, además, el código de la
+ * UNIDAD física (…U03) que es lo que llevan cosidas las prendas. Si el texto
+ * parece un código lo resuelve con barcode_lookup() y añade el id encontrado,
+ * de modo que también funcionan las lecturas sin prefijo o con la unidad
+ * borrada.
+ *
+ * @return array{sql:string, params:array}  sql = '' cuando no hay búsqueda.
+ */
+function product_search_clause(string $raw, string $alias = 'p', string $key = 'q'): array
+{
+    // El lector suele añadir CR/LF y espacios sueltos al final.
+    $text = trim(preg_replace('/[\x00-\x1F\x7F]+/', ' ', $raw) ?? '');
+    if ($text === '') return ['sql' => '', 'params' => []];
+
+    $parts  = ["$alias.name LIKE :$key", "$alias.sku LIKE :$key", "$alias.color LIKE :$key"];
+    $params = [$key => '%' . $text . '%'];
+
+    if (barcode_column_exists()) {
+        $parts[] = "$alias.barcode LIKE :$key";
+    }
+    if (barcode_units_enabled()) {
+        $parts[] = "EXISTS (SELECT 1 FROM product_units pu_$key
+                             WHERE pu_$key.product_id = $alias.id AND pu_$key.barcode LIKE :$key)";
+    }
+
+    if (product_search_looks_like_code($text)) {
+        $hit = barcode_lookup($text);
+        if ($hit) {
+            $parts[] = "$alias.id = :{$key}_id";
+            $params["{$key}_id"] = (int) $hit['id'];
+        }
+    }
+
+    return ['sql' => '(' . implode(' OR ', $parts) . ')', 'params' => $params];
+}
+
+/** ¿El texto buscado tiene pinta de código/SKU (y no de nombre)? */
+function product_search_looks_like_code(string $text): bool
+{
+    return (bool) preg_match('/^[A-Za-z0-9._\/-]{3,}$/', $text);
+}
+
 /* ================================================================== *
  *  FORMATOS DE ETIQUETA (hoja A4)
  * ================================================================== */

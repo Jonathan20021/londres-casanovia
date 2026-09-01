@@ -29,8 +29,12 @@ $products = db_all(
       ORDER BY p.name ASC"
 );
 
+// Códigos de las UNIDADES físicas (…U03): son los que van cosidos a la prenda,
+// así el lector encuentra la pieza aunque la etiqueta no lleve el código maestro.
+$unitsByProduct = barcode_units_by_product(array_column($products, 'id'));
 foreach ($products as &$catalogProduct) {
     $catalogProduct['image_url'] = upload_url($catalogProduct['main_image'] ?? null);
+    $catalogProduct['units']     = $unitsByProduct[(int) $catalogProduct['id']] ?? [];
 }
 unset($catalogProduct);
 
@@ -374,19 +378,30 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
             </div>
 
             <div class="mt-5 rounded-2xl border border-brand-red/15 bg-red-50/40 p-4">
-                <label class="lcn-label" for="barcodeScanner">Lector de código</label>
-                <div class="flex flex-col gap-2 sm:flex-row">
+                <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+                    <label class="lcn-label !mb-0" for="barcodeScanner">Lector de código</label>
+                    <div class="flex items-center gap-3">
+                        <span id="scanStatus" class="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
+                            <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span> Modo escaneo activo
+                        </span>
+                        <label class="inline-flex cursor-pointer items-center gap-1.5 text-[11px] font-medium text-gray-500">
+                            <input type="checkbox" id="scanSound" class="h-3.5 w-3.5 rounded border-gray-300 text-brand-red focus:ring-brand-red/40" checked>
+                            Sonido
+                        </label>
+                    </div>
+                </div>
+                <div class="mt-2 flex flex-col gap-2 sm:flex-row">
                     <div class="relative flex-1">
                         <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-brand-red"><?= icon('tag', 'w-5 h-5') ?></span>
                         <input id="barcodeScanner" type="text" autocomplete="off" inputmode="none"
                                class="lcn-input pl-11 font-mono uppercase tracking-wider"
-                               placeholder="Escanee el código del producto">
+                               placeholder="Escanee una etiqueta tras otra…">
                     </div>
                     <button type="button" id="scanAddButton" class="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-dark px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-black">
                         <?= icon('plus', 'w-4 h-4') ?> Agregar
                     </button>
                 </div>
-                <p id="scanFeedback" class="mt-2 text-xs text-gray-500">El lector puede enviar Enter o Tab. El campo quedará listo para la siguiente pieza.</p>
+                <p id="scanFeedback" class="mt-2 text-xs text-gray-500">Cada pieza se agrega sola y el campo queda listo para la siguiente: no hay que hacer clic ni borrar el código anterior.</p>
             </div>
 
             <div class="mt-4 flex flex-col gap-2 sm:flex-row sm:items-end">
@@ -539,17 +554,49 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
     var byCode = {};
     var selected = [];
 
-    catalog.forEach(function (product) {
+    // Cada codigo (maestro, SKU y el de CADA unidad fisica) apunta a
+    // {product, unit}: la etiqueta cosida a la prenda es la de la unidad.
+    function indexProduct(product) {
         product.id = parseInt(product.id, 10);
+        product.units = product.units || [];
         byId[product.id] = product;
-        [product.barcode, product.sku].forEach(function (code) {
-            code = normalizeCode(code || '');
-            if (code) byCode[code] = product;
-        });
-    });
+        indexCode(product.barcode, product, 0);
+        indexCode(product.sku, product, 0);
+        product.units.forEach(function (unit) { indexCode(unit.code, product, unit.n); });
+        return product;
+    }
+
+    function indexCode(code, product, unitNumber) {
+        code = normalizeCode(code || '');
+        if (!code || byCode[code]) return;
+        byCode[code] = {product: product, unit: unitNumber || 0};
+    }
+
+    // El lector puede mandar el codigo de la unidad, el del producto, el SKU,
+    // solo los digitos o el id: se prueban en ese orden antes de rendirse.
+    function resolveCode(code) {
+        if (!code) return null;
+        if (byCode[code]) return byCode[code];
+
+        var unitParts = code.match(/^(.+?)U(\d+)$/);
+        var base = unitParts ? unitParts[1] : code;
+        var unitNumber = unitParts ? parseInt(unitParts[2], 10) : 0;
+
+        if (byCode[base]) return {product: byCode[base].product, unit: unitNumber};
+
+        var digits = base.replace(/\D+/g, '');
+        if (digits) {
+            var product = byId[parseInt(digits, 10)];
+            if (product) return {product: product, unit: unitNumber};
+        }
+        return null;
+    }
+
+    catalog.forEach(indexProduct);
 
     var scanner = document.getElementById('barcodeScanner');
     var feedback = document.getElementById('scanFeedback');
+    var soundToggle = document.getElementById('scanSound');
     var picker = document.getElementById('productPicker');
     var list = document.getElementById('selectedProducts');
     var empty = document.getElementById('selectedProductsEmpty');
@@ -663,8 +710,14 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
             bottom.className = 'mt-3 flex flex-wrap items-center justify-between gap-2';
             var code = document.createElement('span');
             code.className = 'rounded-lg bg-white px-2 py-1 font-mono text-[11px] tracking-wider text-gray-500 ring-1 ring-gray-100';
-            code.textContent = product.barcode || product.sku || 'Sin código';
+            code.textContent = product.unitCode || product.barcode || product.sku || 'Sin código';
             bottom.appendChild(code);
+            if (product.unitNumber) {
+                var unitTag = document.createElement('span');
+                unitTag.className = 'rounded-lg bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700';
+                unitTag.textContent = 'Unidad ' + product.unitNumber;
+                bottom.appendChild(unitTag);
+            }
 
             if (isComplement(product)) {
                 // Los complementos se cobran al precio que se defina en la factura.
@@ -752,16 +805,49 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
         recalcTotal();
     }
 
-    function addProduct(product, source) {
+    /* ------------------------------------------------------------------ *
+     *  Escaneo continuo: leer -> agregar -> listo para la siguiente
+     * ------------------------------------------------------------------ */
+    function clearScanner() {
+        scanner.value = '';
+        lastLength = 0;
+        fastKeys = 0;
+        previousKeyAt = 0;
+    }
+
+    function scanOk(message) {
+        setFeedback(message, 'ok');
+        signal(true);
+    }
+
+    function scanError(message) {
+        setFeedback(message, 'error');
+        signal(false);
+    }
+
+    function unitCodeOf(product, unitNumber) {
+        var match = (product.units || []).filter(function (unit) { return unit.n === unitNumber; })[0];
+        return match ? match.code : '';
+    }
+
+    function addProduct(product, source, unitNumber) {
         if (!product) {
-            setFeedback('No se encontró un producto de alquiler con ese código.', 'error');
-            scanner.select();
+            if (source !== 'initial') {
+                scanError('No se encontró ningún producto con ese código.');
+                clearScanner();
+                scanner.focus();
+            }
             return;
         }
-        if (selected.some(function (item) { return item.id === product.id; })) {
-            setFeedback(product.name + ' ya está agregado.', 'error');
-            scanner.value = '';
-            scanner.focus();
+        var already = selected.filter(function (item) { return item.id === product.id; })[0];
+        if (already) {
+            // El alquiler guarda una línea por modelo: la pieza no se duplica.
+            if (source !== 'initial') {
+                scanError(product.name + ' ya está en la lista'
+                    + (already.unitNumber ? ' (unidad ' + already.unitNumber + ')' : '') + '.');
+                clearScanner();
+                scanner.focus();
+            }
             return;
         }
         // Copia propia de la línea: el precio de los complementos se edita aquí.
@@ -769,34 +855,83 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
         line.price = initialPrices[product.id] !== undefined
             ? num(initialPrices[product.id])
             : num(product.rental_price);
-        line.alter     = !!initialAlterations[product.id];
-        line.alterNote = initialAlterNotes[product.id] || '';
+        line.alter      = !!initialAlterations[product.id];
+        line.alterNote  = initialAlterNotes[product.id] || '';
+        line.unitNumber = unitNumber || 0;
+        line.unitCode   = line.unitNumber ? unitCodeOf(product, line.unitNumber) : '';
         selected.push(line);
         render();
-        setFeedback('Agregado: ' + product.name + '. Listo para escanear la siguiente pieza.', 'ok');
-        scanner.value = '';
+        clearScanner();
         picker.value = '';
-        if (source !== 'initial') scanner.focus();
+        if (source !== 'initial') {
+            scanOk('Agregado: ' + product.name
+                + (line.unitNumber ? ' · unidad ' + line.unitNumber : '')
+                + '. Escanee la siguiente pieza.');
+            scanner.focus();
+        }
     }
 
     function addScanned() {
-        if (scanTimer) {
-            clearTimeout(scanTimer);
-            scanTimer = null;
-        }
+        stopScanTimer();
         var code = normalizeCode(scanner.value);
+        clearScanner();               // el campo queda SIEMPRE listo para la siguiente
         if (!code) {
-            setFeedback('Escanee o escriba un código.', 'error');
+            scanError('Escanee o escriba un código.');
             scanner.focus();
             return;
         }
-        addProduct(byCode[code], 'scanner');
+        var hit = resolveCode(code);
+        if (hit) {
+            addProduct(hit.product, 'scanner', hit.unit);
+            return;
+        }
+        lookupOnServer(code);         // etiqueta que no está en el catálogo cargado
+    }
+
+    /*
+     * El catálogo del formulario solo trae piezas alquilables y activas. Si el
+     * código no aparece se pregunta al servidor, que dice POR QUÉ (es de venta,
+     * está inactivo, no existe) o devuelve un producto creado después de abrir
+     * esta pantalla para agregarlo igualmente.
+     */
+    var pendingLookup = null;
+    function lookupOnServer(code) {
+        setFeedback('Buscando ' + code + '…', 'info');
+        if (pendingLookup) pendingLookup.abort();
+        var controller = typeof AbortController === 'function' ? new AbortController() : null;
+        pendingLookup = controller;
+        fetch(window.LCN_BASE + '/admin/alquileres/buscar-producto.php?code=' + encodeURIComponent(code), {
+            credentials: 'same-origin',
+            headers: {'X-Requested-With': 'XMLHttpRequest'},
+            signal: controller ? controller.signal : undefined
+        }).then(function (response) {
+            return response.ok ? response.json() : Promise.reject(new Error('http ' + response.status));
+        }).then(function (data) {
+            pendingLookup = null;
+            if (data && data.ok && data.product) {
+                var product = byId[parseInt(data.product.id, 10)] || indexProduct(data.product);
+                addProduct(product, 'scanner', parseInt(data.unit_number || 0, 10));
+                return;
+            }
+            scanError((data && data.message) || ('Ningún producto tiene el código ' + code + '.'));
+            scanner.focus();
+        }).catch(function (error) {
+            pendingLookup = null;
+            if (error && error.name === 'AbortError') return;
+            scanError('No se pudo consultar el código ' + code + '. Intente de nuevo.');
+            scanner.focus();
+        });
     }
 
     document.getElementById('scanAddButton').addEventListener('click', addScanned);
     document.getElementById('pickerAddButton').addEventListener('click', function () {
-        addProduct(byId[parseInt(picker.value, 10)], 'picker');
+        addProduct(byId[parseInt(picker.value, 10)], 'picker', 0);
     });
+    // También al elegir en el desplegable, sin tener que pulsar el botón.
+    picker.addEventListener('change', function () {
+        if (picker.value) addProduct(byId[parseInt(picker.value, 10)], 'picker', 0);
+    });
+
     scanner.addEventListener('keydown', function (event) {
         if (event.key === 'Enter' || event.key === 'Tab') {
             event.preventDefault();
@@ -804,19 +939,83 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
         }
     });
 
-    // Algunos lectores no envían Enter: una ráfaga rápida se confirma tras 180 ms.
+    /*
+     * Muchos lectores no envían Enter: la ráfaga de teclas (o el pegado de golpe)
+     * se confirma sola tras 160 ms de silencio.
+     */
     var previousKeyAt = 0;
     var fastKeys = 0;
+    var lastLength = 0;
     var scanTimer = null;
-    scanner.addEventListener('input', function () {
+
+    function stopScanTimer() {
+        if (scanTimer) { clearTimeout(scanTimer); scanTimer = null; }
+    }
+
+    function noteKeystroke(jump) {
         var now = Date.now();
-        fastKeys = previousKeyAt && now - previousKeyAt < 55 ? fastKeys + 1 : 0;
+        fastKeys = previousKeyAt && (now - previousKeyAt) < 90 ? fastKeys + 1 : 0;
         previousKeyAt = now;
-        clearTimeout(scanTimer);
-        if (fastKeys >= 3 && scanner.value.trim().length >= 3) {
-            scanTimer = setTimeout(addScanned, 180);
+        lastLength = scanner.value.length;
+        stopScanTimer();
+        if ((fastKeys >= 2 || jump >= 4) && normalizeCode(scanner.value).length >= 4) {
+            scanTimer = setTimeout(addScanned, 160);
+        }
+    }
+
+    scanner.addEventListener('input', function () {
+        noteKeystroke(scanner.value.length - lastLength);
+    });
+
+    /*
+     * El lector escribe como un teclado. Si el foco no está dentro de un campo,
+     * las teclas se desvían al campo de escaneo: así no hay que hacer clic en él.
+     */
+    document.addEventListener('keydown', function (event) {
+        if (event.ctrlKey || event.metaKey || event.altKey) return;
+        var target = event.target;
+        var tag = target && target.tagName ? target.tagName.toUpperCase() : '';
+        if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || tag === 'BUTTON'
+            || tag === 'A' || (target && target.isContentEditable)) {
+            return;
+        }
+        if (event.key && event.key.length === 1) {
+            event.preventDefault();
+            scanner.value += event.key;
+            scanner.focus();
+            noteKeystroke(1);
+        } else if (event.key === 'Enter' && scanner.value !== '') {
+            event.preventDefault();
+            addScanned();
         }
     });
+
+    /* Aviso sonoro + destello: la usuaria mira la prenda, no la pantalla. */
+    var audioContext = null;
+    function signal(ok) {
+        scanner.classList.remove('ring-2', 'ring-emerald-400', 'ring-rose-400');
+        void scanner.offsetWidth;
+        scanner.classList.add('ring-2', ok ? 'ring-emerald-400' : 'ring-rose-400');
+        setTimeout(function () {
+            scanner.classList.remove('ring-2', 'ring-emerald-400', 'ring-rose-400');
+        }, 500);
+        if (soundToggle && !soundToggle.checked) return;
+        try {
+            var Ctx = window.AudioContext || window.webkitAudioContext;
+            if (!Ctx) return;
+            audioContext = audioContext || new Ctx();
+            if (audioContext.state === 'suspended') audioContext.resume();
+            var osc  = audioContext.createOscillator();
+            var gain = audioContext.createGain();
+            osc.type = ok ? 'sine' : 'square';
+            osc.frequency.value = ok ? 1180 : 240;
+            gain.gain.value = 0.06;
+            osc.connect(gain);
+            gain.connect(audioContext.destination);
+            osc.start();
+            osc.stop(audioContext.currentTime + (ok ? 0.09 : 0.24));
+        } catch (error) { /* sin audio disponible: basta el destello */ }
+    }
 
     document.getElementById('checkAllAvailability').addEventListener('click', function () {
         var delivery = document.getElementById('delivery_date').value;
@@ -874,7 +1073,7 @@ require LCN_ROOT . '/app/views/layouts/admin_header.php';
         }
     });
 
-    initialIds.forEach(function (id) { addProduct(byId[id], 'initial'); });
+    initialIds.forEach(function (id) { addProduct(byId[id], 'initial', 0); });
     render();
     scanner.focus();
 })();
